@@ -32,7 +32,7 @@ async def play_music(query, mixer):
         video = YoutubeSearch(query, max_results=1).to_dict()[0]
         source = await from_url(f"https://www.youtube.com/watch?v={video['id']}")
         mixer.add_music(discord.FFmpegPCMAudio(source, executable=config.ffmpeg_local_file, before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"))
-        return f'Включил музыку - {video["title"]}'
+        return f'`Включил трек - {video["title"]}`'
     except Exception as e:
         # traceback.print_exc()
         logging.warning(e)

@@ -264,7 +264,7 @@ class GPT:
                     # "get_member": (self.get_member, ("nick",)),  # временно отключено, бот слишком часто её использовал
                 }
                 messages.append(resp_message)
-                gifs = []
+                urls = []
                 for tool_call in tool_calls:
                     function_name = tool_call.function.name
                     function_to_call = available_functions.get(function_name, (self.fake_func, ()))
@@ -277,8 +277,8 @@ class GPT:
 
                     function_response = await function_to_call[0](**kwargs)
 
-                    if function_name == "search_gif_on_tenor" and function_response.startswith("http"):
-                        gifs.append(function_response)
+                    if function_name in ("search_gif_on_tenor", "play_from_text"):
+                        urls.append(function_response)
                     logging.info(f"{function_name}, {function_response}")
                     messages.append(
                         {
@@ -293,7 +293,7 @@ class GPT:
                     model=config.models[self.model_number]
                 )
                 resp_message = res.choices[0].message
-                for i in gifs:
+                for i in urls:
                     if i not in resp_message:
                         resp_message.content += f"\n{i}"
 
