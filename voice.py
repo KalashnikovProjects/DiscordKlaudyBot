@@ -1,106 +1,111 @@
 import asyncio
 import datetime
+import io
 import logging
-import time
-import discord
-import discord.ext.voice_recv
-import speech_recognition as sr
-from discord.ext import voice_recv
+import threading
 from pydub import AudioSegment
-import requests
-import config
+import discord
+from discord.ext import voice_recv
+import speech_recognition as sr
 
-CHUNK = 1024
-FORMAT = 8
-CHANNELS = 1
-RATE = 48000
-PAUSE_SECONDS = 3
-THRESHOLD = 1500
+import config
+import mixer
+import utils
+
 recognizer = sr.Recognizer()
+recognizer.operation_timeout = 60
 
 
 class VoiceConnect:
-    def __init__(self):
-        self.vch: discord.VoiceChannel = None
+    def __init__(self, vch: discord.VoiceChannel, gpt_obj, vc=None):
+        self.saying = False
         self.vc: voice_recv.VoiceRecvClient = None
-        self.users_recording_states = None
-        self.users_frames = None
-        self.connected = False
-        self.gpt_obj = None
-
-    async def enter_voice(self, vch: discord.VoiceChannel, gpt_obj):
-        self.gpt_obj = gpt_obj
-        self.users_frames = {}
+        self.mixer_player: mixer.MixerSourceQue = None
         self.users_recording_states = {}
-        self.connected = True
+        self.users_frames = {}
+        self.connected = False
         self.vch = vch
+        self.gpt_obj = gpt_obj
 
-        def callback(user, data: voice_recv.VoiceData):
-            ext_data = data.packet.extension_data.get(voice_recv.ExtensionID.audio_power)
-            value = int.from_bytes(ext_data, 'big')
-            power = 127-(value & 127)
-            if user not in self.users_frames:
-                self.users_recording_states[user] = {"recording": False,
-                                                     "last_package_time": datetime.datetime(2000, month=1, day=1)}
-                self.users_frames[user] = []
-            if user not in self.users_recording_states:
-                self.users_recording_states[user] = {"recording": False,
-                                                     "last_package_time": datetime.datetime(2000, month=1, day=1)}
+        utils.run_in_thread(self.enter_voice(vch, vc=vc))
 
-            record_state = self.users_recording_states[user]
-            now = datetime.datetime.now()
-            if not record_state["recording"]:
-                if now - record_state["last_package_time"] > datetime.timedelta(seconds=1):
-                    self.users_frames[user] = []
-                self.users_frames[user].append(data.pcm)
+    def process_callback(self, user, data: voice_recv.VoiceData):
+        if user is None or user == self.gpt_obj.bot.user:
+            return
+        if user not in self.users_frames:
+            self.users_recording_states[user] = {"last_package_time": datetime.datetime(2000, month=1, day=1)}
+            self.users_frames[user] = []
+        if user not in self.users_recording_states:
+            self.users_recording_states[user] = {"last_package_time": datetime.datetime(2000, month=1, day=1)}
 
-            record_state["last_package_time"] = now
+        record_state = self.users_recording_states[user]
+        now = datetime.datetime.now()
+        if now - record_state["last_package_time"] > datetime.timedelta(seconds=1) and len(
+                self.users_frames[user]) <= 40:
+            self.users_frames[user] = []
+        self.users_frames[user].append(data.pcm)
 
-        self.vc = await vch.connect(cls=voice_recv.VoiceRecvClient)
-        asyncio.create_task(self.check_states_loop())
-        self.vc.listen(voice_recv.BasicSink(callback))
+        record_state["last_package_time"] = now
+
+    async def enter_voice(self, vch: discord.VoiceChannel, vc=None):
+        if not vc:
+            self.vc = await vch.connect(cls=voice_recv.VoiceRecvClient)
+        else:
+            self.vc = vc
+        self.connected = True
+        self.mixer_player = mixer.MixerSourceQue()
+        threading.Thread(self.vc.play(self.mixer_player))
+        utils.run_in_thread(self.check_states_loop())
+        threading.Thread(self.vc.listen(voice_recv.BasicSink(self.process_callback)))
 
     async def check_states_loop(self):
         while self.connected:
-            await asyncio.sleep(1)
-            if len(self.vch.members) <= 1:
-                await self.exit()
-                return
-            for user, state in self.users_recording_states.items():
-                if (len(self.users_frames[user]) > 40 and datetime.datetime.now() -
-                        state["last_package_time"] > datetime.timedelta(seconds=1)):
-                    state["recording"] = False
-                    await self.process_raw_frames(self.users_frames[user], user)
-                    self.users_frames[user] = []
+            await asyncio.sleep(0.05)
+            try:
+                if not self.vc.is_connected():
+                    await self.exit()
+                    return
+                await asyncio.sleep(0.1)
+                if len(self.vch.members) <= 1:
+                    await self.exit()
+                    return
+                for user, state in self.users_recording_states.items():
+                    if len(self.users_frames[user]) > 40 and datetime.datetime.now() - state["last_package_time"] > datetime.timedelta(seconds=1):
+
+                        data = self.users_frames[user].copy()
+                        self.users_frames[user] = []
+                        self.users_recording_states[user] = {"last_package_time": datetime.datetime(2000, month=1, day=1)}
+                        utils.run_in_thread(self.process_raw_frames(data, user))
+            except Exception:
+                continue
 
     async def exit(self):
+        del self.gpt_obj.voice_connections[self.vch.guild.id]
         await self.vc.disconnect()
 
     async def process_raw_frames(self, frames, user):
-        source = b''.join(frames)
-        audio = AudioSegment(source, sample_width=2, frame_rate=RATE, channels=2)
-
-        audio.export("temp.wav", format="mp3")
-        with sr.AudioFile(audio.export(format="wav")) as source:
-            audio_data_wav = recognizer.record(source)
         try:
-            query = recognizer.recognize_google(audio_data_wav, language='ru-RU')
-            logging.debug(f"Распознанный текст: {query}")
+            source = b''.join(frames)
+            audio = AudioSegment(source, sample_width=2, frame_rate=48000, channels=2)
+            with sr.AudioFile(audio.export(format="wav")) as source:
+                audio_data_wav = recognizer.record(source)
+            query = recognizer.recognize_wit(audio_data_wav, config.wit_token)
+            logging.info(f"Распознанный текст: {query}")
+            # if "клауди" not in query.lower():
+            #     return
+
             res = await self.gpt_obj.voice_gpt(query, user, self.vch, self.vc)
-            # tts = gTTS(text, lang="ru")
-            # tts.save('temp.mp3')
-            audio_source = discord.FFmpegPCMAudio(await self.create_tts(res), executable="./ffmpeg.exe")
-            while self.vc.is_playing():
-                time.sleep(2)
-            self.vc.play(audio_source)
+            if not self.vc.is_connected():
+                return
+            logging.info(f"Результат текст: {res}")
+            tts_file = await self.create_tts(res)
+            audio_source = discord.FFmpegPCMAudio(io.BytesIO(tts_file), executable="./ffmpeg.exe", pipe=True)
+            self.mixer_player.add_talk(audio_source)
         except sr.UnknownValueError:
-            pass
+            return
         except sr.RequestError as e:
-            logging.warning(f"Ошибка {e} в Google Speech Recognition")
+            logging.warning(f"Ошибка {e} в Speech Recognition")
 
     async def create_tts(self, text):
-        a = await self.gpt_obj.que_tts(input=text, model="tts-1", voice=config.clyde_voice)
-        a.stream_to_file("temp.mp3")
-        return "temp.mp3"
-
-
+        a = await self.gpt_obj.que_tts(input=text, model="tts-1", voice=config.clyde_voice, speed=0.85)
+        return a.read()
