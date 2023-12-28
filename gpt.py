@@ -154,6 +154,8 @@ class GPT:
             async with aiohttp.ClientSession() as aiohttp_session:
                 async with aiohttp_session.get(url, params=params) as response:
                     data = await response.json()
+                    if len(data['results']) == 0:
+                        return "`Не нашлось гифок`"
                     gif_url = data['results'][0]['media_formats']["gif"]["url"]
                     return gif_url
         except Exception as e:
