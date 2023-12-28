@@ -164,7 +164,8 @@ class GPT:
         if voice is None:
             if not message.author.voice:
                 return "ты не в голосовом канале"
-            voice = self.voice_connections[message.guild.id] = VoiceConnect(message.author.voice.channel, gpt_obj=self)
+            self.voice_connections[message.guild.id] = VoiceConnect(message.author.voice.channel, gpt_obj=self)
+            voice = self.voice_connections[message.guild.id]
         while voice.mixer_player is None:
             await asyncio.sleep(0.2)
         return await voice_music.play_music(query, voice.mixer_player)
