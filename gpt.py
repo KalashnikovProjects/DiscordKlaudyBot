@@ -79,6 +79,8 @@ class GPT:
             if not message.author.voice:
                 return "автор не в голосовом канале"
             current_voice = self.voice_connections.get(message.guild.id)
+            if current_voice.vch.id == message.author.voice.channel.id:
+                return "Уже в голосовом канале"
             if current_voice:
                 await current_voice.exit()
                 await asyncio.sleep(0.3)
@@ -163,8 +165,8 @@ class GPT:
             if not message.author.voice:
                 return "ты не в голосовом канале"
             voice = self.voice_connections[message.guild.id] = VoiceConnect(message.author.voice.channel, gpt_obj=self)
-            while voice.mixer_player is None:
-                await asyncio.sleep(0.2)
+        while voice.mixer_player is None:
+            await asyncio.sleep(0.2)
         return await voice_music.play_music(query, voice.mixer_player)
 
     async def stop_from_text(self, message: discord.Message):

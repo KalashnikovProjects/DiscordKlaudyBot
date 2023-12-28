@@ -99,7 +99,7 @@ class VoiceConnect:
                 return
             logging.info(f"Результат текст: {res}")
             tts_file = await self.create_tts(res)
-            audio_source = discord.FFmpegPCMAudio(io.BytesIO(tts_file), executable="./ffmpeg.exe", pipe=True)
+            audio_source = discord.FFmpegPCMAudio(io.BytesIO(tts_file), executable=config.ffmpeg_local_file, pipe=True)
             self.mixer_player.add_talk(audio_source)
         except sr.UnknownValueError:
             return

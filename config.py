@@ -2,6 +2,8 @@ import os
 import logging
 log_level = logging.INFO
 
+ffmpeg_local_file = "./ffmpeg.exe"  # None
+
 ya300_token = os.environ['ya300_token']
 ya300_server = "https://300.ya.ru/api/sharing-url"
 tenor_token = os.environ['tenor_token']
