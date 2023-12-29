@@ -40,8 +40,8 @@ class VoiceConnect:
 
         record_state = self.users_recording_states[user]
         now = datetime.datetime.now()
-        if now - record_state["last_package_time"] > datetime.timedelta(seconds=1) and len(
-                self.users_frames[user]) <= 40:
+        if now - record_state["last_package_time"] > datetime.timedelta(seconds=1.5) and len(
+                self.users_frames[user]) <= 30:
             self.users_frames[user] = []
         self.users_frames[user].append(data.pcm)
 
@@ -70,7 +70,7 @@ class VoiceConnect:
                     await self.exit()
                     return
                 for user, state in self.users_recording_states.items():
-                    if len(self.users_frames[user]) > 40 and datetime.datetime.now() - state["last_package_time"] > datetime.timedelta(seconds=1):
+                    if len(self.users_frames[user]) > 30 and datetime.datetime.now() - state["last_package_time"] > datetime.timedelta(seconds=1.5):
 
                         data = self.users_frames[user].copy()
                         self.users_frames[user] = []

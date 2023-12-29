@@ -79,11 +79,11 @@ class GPT:
             if not message.author.voice:
                 return "автор не в голосовом канале"
             current_voice = self.voice_connections.get(message.guild.id)
-            if current_voice.vch.id == message.author.voice.channel.id:
-                return "Уже в голосовом канале"
             if current_voice:
+                if current_voice.vch.id == message.author.voice.channel.id:
+                    return "Уже в голосовом канале"
                 await current_voice.exit()
-                await asyncio.sleep(0.3)
+                await asyncio.sleep(1)
             self.voice_connections[message.guild.id] = VoiceConnect(message.author.voice.channel, gpt_obj=self)
             return "Успешно зашёл в голосовой канал"
         except Exception as e:
@@ -106,6 +106,11 @@ class GPT:
             return f"Ошибка {e}"
 
     async def link_checker(self, url):
+        """
+        Проверяет текстовое содержание ссылки.
+        Если текста не много, использует его
+        Если много, то использует нейросеть от Яндекса 300.ya.ru для выделения главного
+        """
         try:
             async with aiohttp.ClientSession() as aiohttp_session:
                 async with await aiohttp_session.get(url) as res:
@@ -162,21 +167,27 @@ class GPT:
             return f"Ошибка {e}"
 
     async def play_from_text(self, query, message: discord.Message):
-        voice = self.voice_connections.get(message.guild.id)
-        if voice is None:
-            if not message.author.voice:
-                return "ты не в голосовом канале"
-            self.voice_connections[message.guild.id] = VoiceConnect(message.author.voice.channel, gpt_obj=self)
-            voice = self.voice_connections[message.guild.id]
-        while voice.mixer_player is None:
-            await asyncio.sleep(0.2)
-        return await voice_music.play_music(query, voice.mixer_player)
+        try:
+            voice = self.voice_connections.get(message.guild.id)
+            if voice is None:
+                if not message.author.voice:
+                    return "ты не в голосовом канале"
+                self.voice_connections[message.guild.id] = VoiceConnect(message.author.voice.channel, gpt_obj=self)
+                voice = self.voice_connections[message.guild.id]
+            while voice.mixer_player is None:
+                await asyncio.sleep(0.2)
+            return await voice_music.play_music(query, voice.mixer_player)
+        except Exception as e:
+            return f"Ошибка {e}"
 
     async def stop_from_text(self, message: discord.Message):
-        voice = self.voice_connections.get(message.guild.id)
-        if voice is None:
-            return "сейчас не играет музыка"
-        return await voice_music.off_music(voice.mixer_player)
+        try:
+            voice = self.voice_connections.get(message.guild.id)
+            if voice is None:
+                return "сейчас не играет музыка"
+            return await voice_music.off_music(voice.mixer_player)
+        except Exception as e:
+            return f"Ошибка {e}"
 
     async def fake_func(self, *args, **kwargs):
         return "Ты пытаешься вызвать несуществующую функцию"
