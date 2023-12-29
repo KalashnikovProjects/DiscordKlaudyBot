@@ -23,7 +23,6 @@ class VoiceConnect:
         self.mixer_player: mixer.MixerSourceQue = None
         self.users_recording_states = {}
         self.users_frames = {}
-        self.connected = False
         self.vch = vch
         self.gpt_obj = gpt_obj
 
@@ -52,23 +51,18 @@ class VoiceConnect:
             self.vc = await vch.connect(cls=voice_recv.VoiceRecvClient)
         else:
             self.vc = vc
-        self.connected = True
         self.mixer_player = mixer.MixerSourceQue()
         threading.Thread(self.vc.play(self.mixer_player))
         utils.run_in_thread(self.check_states_loop())
         threading.Thread(self.vc.listen(voice_recv.BasicSink(self.process_callback)))
 
     async def check_states_loop(self):
-        while self.connected:
+        while self.vc and self.vc.is_connected():
             await asyncio.sleep(0.05)
             try:
-                if not self.vc.is_connected():
-                    await self.exit()
-                    return
                 await asyncio.sleep(0.1)
-                if len(self.vch.members) <= 1:
-                    await self.exit()
-                    return
+                if not self.vch or len(self.vch.members) <= 1:
+                    break
                 for user, state in self.users_recording_states.items():
                     if len(self.users_frames[user]) > 30 and datetime.datetime.now() - state["last_package_time"] > datetime.timedelta(seconds=1.5):
 
@@ -78,6 +72,7 @@ class VoiceConnect:
                         utils.run_in_thread(self.process_raw_frames(data, user))
             except Exception:
                 continue
+        await self.exit()
 
     async def exit(self):
         del self.gpt_obj.voice_connections[self.vch.guild.id]
