@@ -25,7 +25,7 @@ class VoiceConnect:
         self.users_frames = {}
         self.vch = vch
         self.gpt_obj = gpt_obj
-
+        self.voice_history = []
         utils.run_in_thread(self.enter_voice(vch, vc=vc))
 
     def process_callback(self, user, data: voice_recv.VoiceData):
@@ -89,13 +89,17 @@ class VoiceConnect:
             # if "клауди" not in query.lower():
             #     return
 
-            res = await self.gpt_obj.voice_gpt(query, user, self.vch, self.vc)
+            res = await self.gpt_obj.voice_gpt(query, user, self.vch, self.vc, self.voice_history)
             if not self.vc.is_connected():
                 return
             logging.info(f"Результат текст: {res}")
             tts_file = await self.create_tts(res)
             audio_source = discord.FFmpegPCMAudio(io.BytesIO(tts_file), executable=config.ffmpeg_local_file, pipe=True)
             self.mixer_player.add_talk(audio_source)
+            self.voice_history.append({"role": "user", "content": query})
+            self.voice_history.append({"role": "system", "content": res})
+            if len(self.voice_history) > 5:
+                self.voice_history = self.voice_history[-5:]
         except sr.UnknownValueError:
             return
         except sr.RequestError as e:

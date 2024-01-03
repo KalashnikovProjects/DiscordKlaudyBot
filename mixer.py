@@ -21,7 +21,7 @@ class MixerSourceQue(discord.AudioSource):
         mixed_frame = pydub.AudioSegment.silent(duration=20, frame_rate=48000)
 
         silent = True
-        for que in (self.music_que, self.talk_que):
+        for que_type, que in (("music", self.music_que), ("talk", self.talk_que)):
             if len(que) == 0:
                 continue
             stream = que[0]
@@ -34,6 +34,13 @@ class MixerSourceQue(discord.AudioSource):
                 audio_data_segment = pydub.AudioSegment.from_opus(audio_data)
             else:
                 audio_data_segment = pydub.AudioSegment(audio_data, frame_rate=48000, sample_width=2, channels=2)
+            if que_type == "music":
+                audio_data_segment -= 5
+                if self.talk_que:
+                    audio_data_segment -= 7
+            elif que_type == "talk":
+                audio_data_segment += 7
+
             silent = False
             mixed_frame = mixed_frame.overlay(audio_data_segment)
 

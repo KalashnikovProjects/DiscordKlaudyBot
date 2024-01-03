@@ -77,7 +77,7 @@ class GPT:
     async def enjoy_voice(self, message: discord.Message):
         try:
             if not message.author.voice:
-                return "автор не в голосовом канале"
+                return "ты не в голосовом канале"
             current_voice = self.voice_connections.get(message.guild.id)
             if current_voice:
                 if current_voice.vch.id == message.author.voice.channel.id:
@@ -171,14 +171,14 @@ class GPT:
             voice = self.voice_connections.get(message.guild.id)
             if voice is None:
                 if not message.author.voice:
-                    return "ты не в голосовом канале"
+                    return "`ты не в голосовом канале`"
                 self.voice_connections[message.guild.id] = VoiceConnect(message.author.voice.channel, gpt_obj=self)
                 voice = self.voice_connections[message.guild.id]
             while voice.mixer_player is None:
                 await asyncio.sleep(0.2)
             return await voice_music.play_music(query, voice.mixer_player)
         except Exception as e:
-            return f"Ошибка {e}"
+            return f"`Ошибка {e}`"
 
     async def stop_from_text(self, message: discord.Message):
         try:
@@ -192,13 +192,14 @@ class GPT:
     async def fake_func(self, *args, **kwargs):
         return "Ты пытаешься вызвать несуществующую функцию"
 
-    async def voice_gpt(self, query, author, channel: discord.VoiceChannel, client: discord.VoiceClient):
+    async def voice_gpt(self, query, author, channel: discord.VoiceChannel, client: discord.VoiceClient, voice_history):
         info_message = f"""Информация о голосовом чате
                     Название сервера: {channel.guild.name}
                     Название голосового канала: {channel.name}"""
         if len(channel.members) < 12:
             info_message += f"\nСписок ников пользователей голосового чата чата: {', '.join([i.display_name for i in channel.members])}"
         messages = [{"role": "system", "content": config.clyde_knowns}, {"role": "system", "content": info_message},
+                    *voice_history,
                     {"role": "user", "content": f"{author.display_name}: {query}"}]
         try:
             res = await self.que_gpt(
@@ -281,6 +282,7 @@ class GPT:
                 for tool_call in tool_calls:
                     function_name = tool_call.function.name
                     function_to_call = available_functions.get(function_name, (self.fake_func, ()))
+                    print(tool_call.function.arguments)
                     function_args = json.loads(tool_call.function.arguments)
                     kwargs = {a: b for a, b in function_args.items() if a in function_to_call[1]}
                     if function_name == "get_member":

@@ -13,4 +13,4 @@ discord-ext-voice-recv
 SpeechRecognition
 aiohttp
 yt-dlp
-youtube-search
+youtube-search-python
