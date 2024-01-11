@@ -13,6 +13,7 @@ _Privileged Gateway Intents_, получить токен
 3. Нужно добавить *ffmpeg.exe* или поменять *ffmpeg_local_file* в **config.py** на `ffmpeg`
 4. Установить зависимости из [requirements.txt](requirements.txt)
 5. Заполнить поля **environment variables** (переменных окружения) своими значениями
+6. Запустить функцию main в clyde.py на сервере 
 ## Переменные окружения:
 * **discord_token** - токен для дискорд бота
 * **openai_tokens** - список токенов для OpenAI с разных аккаунтов через `,` и пробел, несколько используется для обхода ограничения в 3 сообщения в минуту в пробном тарифе https://platform.openai.com/api-keys
