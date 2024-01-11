@@ -1,7 +1,6 @@
 # import traceback
 from youtubesearchpython.__future__ import VideosSearch
 
-import json
 import logging
 
 import discord
@@ -30,7 +29,7 @@ async def from_url(url):
 
 async def play_music(query, mixer):
     try:
-        response = await VideosSearch(query, limit=1).next()
+        response = await VideosSearch(query, limit=1, timeout=config.requests_timeout).next()
         video = response["result"][0]
         source = await from_url(video['link'])
         mixer.add_music(discord.FFmpegPCMAudio(source, executable=config.ffmpeg_local_file, before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"))

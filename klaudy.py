@@ -57,6 +57,8 @@ class BotEventHandler(discord.Client):
                 message.content.startswith(f"!{config.name}")):
             async with message.channel.typing():
                 answer = await self.process_brain(message)
+                if answer == "":
+                    return
                 await message.channel.send(answer, reference=message, allowed_mentions=discord.AllowedMentions.all())
 
     async def one_message_process(self, mes):
@@ -95,7 +97,7 @@ class BotEventHandler(discord.Client):
             for member in message.guild.members:
                 info_message += f"\n{member.display_name}: {member.name}"
 
-        system_messages = [{"role": "system", "content": config.clyde_knowns},
+        system_messages = [{"role": "system", "content": config.klaudy_knowns},
                            {"role": "system", "content": info_message}]
 
         messages = []

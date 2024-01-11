@@ -10,10 +10,14 @@ from bs4 import BeautifulSoup
 import traceback
 
 import config
-import clyde_tools
+import klaudy_tools
 import utils
 import voice_music
 from voice import VoiceConnect
+
+
+class QueTimoutError(Exception):
+    pass
 
 
 class GPT:
@@ -32,7 +36,8 @@ class GPT:
         self.openai_client = openai.AsyncOpenAI(
                 api_key=config.openai_token,
                 base_url=config.chatgpt_server,
-                max_retries=0
+                max_retries=0,
+                timeout=config.openai_timeout
         )
         self.bot: discord.Client = bot
         self.voice_connections = {}
@@ -95,7 +100,7 @@ class GPT:
         В данный момент не используется
         """
         try:
-            async with aiohttp.ClientSession() as aiohttp_session:
+            async with aiohttp.ClientSession(timeout=config.requests_timeout) as aiohttp_session:
                 async with aiohttp_session.get(url) as res:
                     res.encoding = 'UTF-8'
                     text = self.html2text_client.handle(await res.text())
@@ -112,7 +117,7 @@ class GPT:
         Если много, то использует нейросеть от Яндекса 300.ya.ru для выделения главного
         """
         try:
-            async with aiohttp.ClientSession() as aiohttp_session:
+            async with aiohttp.ClientSession(timeout=config.requests_timeout) as aiohttp_session:
                 async with await aiohttp_session.get(url) as res:
                     res.encoding = 'UTF-8'
                     text = self.html2text_client.handle(await res.text())
@@ -156,7 +161,7 @@ class GPT:
                 'limit': 1,
                 'ckey': "my_test_app"
             }
-            async with aiohttp.ClientSession() as aiohttp_session:
+            async with aiohttp.ClientSession(timeout=config.requests_timeout) as aiohttp_session:
                 async with aiohttp_session.get(url, params=params) as response:
                     data = await response.json()
                     if len(data['results']) == 0:
@@ -198,14 +203,14 @@ class GPT:
                     Название голосового канала: {channel.name}"""
         if len(channel.members) < 12:
             info_message += f"\nСписок ников пользователей голосового чата чата: {', '.join([i.display_name for i in channel.members])}"
-        messages = [{"role": "system", "content": config.clyde_knowns}, {"role": "system", "content": info_message},
+        messages = [{"role": "system", "content": config.klaudy_knowns}, {"role": "system", "content": info_message},
                     *voice_history,
                     {"role": "user", "content": f"{author.display_name}: {query}"}]
         try:
             res = await self.que_gpt(
                 messages=messages,
                 model=config.models[self.model_number],
-                tools=clyde_tools.voice_tools, tool_choice="auto",
+                tools=klaudy_tools.voice_tools, tool_choice="auto",
             )
             await asyncio.sleep(0.1)
             resp_message = res.choices[0].message
@@ -250,9 +255,11 @@ class GPT:
                     return f"Дневной рейт лимит"
                 self.models_dead = True
                 self.model_number = (self.model_number + 1) % len(config.models)
-                return await self.voice_gpt(messages, author=author, channel=channel, client=client)
+                return await self.voice_gpt(messages, author=author, channel=channel, client=client, voice_history=voice_history)
         except openai.APITimeoutError:
             return f"Таймаут запроса"
+        except QueTimoutError:
+            return ""
         except Exception as e:
             return f"Ошибка {e}"
 
@@ -263,7 +270,7 @@ class GPT:
             res = await self.que_gpt(
                 messages=messages,
                 model=config.models[self.model_number],
-                tools=clyde_tools.text_tools, tool_choice="auto",
+                tools=klaudy_tools.text_tools, tool_choice="auto",
             )
             await asyncio.sleep(0.1)
             resp_message = res.choices[0].message
@@ -320,12 +327,14 @@ class GPT:
                 return f"Произошёл минутный рейт лимит ({len(config.openai_tokens) * 3} запроса в минуту, подожди)"
             else:
                 if self.models_dead:
-                    return f"Произошёл дневной рейт лимит (200 запросов в день)"
+                    return f"Произошёл какой-то рейт лимит {e.message}"
                 self.models_dead = True
                 self.model_number = (self.model_number + 1) % len(config.models)
                 return await self.chat_gpt(messages, mes=mes)
         except openai.APITimeoutError:
             return f"Произошёл таймаут запроса (ошибка)"
+        except QueTimoutError:
+            return ""
         except Exception as e:
             traceback.print_exc()
             logging.warning(f"Ошибка {e}")
@@ -356,6 +365,9 @@ class GPT:
             my_que.append(my)
             while my in self.openai_que[my_num]:
                 await asyncio.sleep(1)
+                if time.time() - my > config.openai_timeout:
+                    my_que.pop(my_que.index(my))
+                    raise QueTimoutError()
         self.openai_message_count[my_num] -= 1
         self.openai_client.api_key = config.openai_tokens[my_num]
         res = await self.openai_client.chat.completions.create(**kwargs)
@@ -379,6 +391,9 @@ class GPT:
             my_que.append(my)
             while my in self.tts_que[my_num]:
                 await asyncio.sleep(1)
+                if time.time() - my > config.que_timeout:
+                    my_que.pop(my_que.index(my))
+                    raise QueTimoutError()
         self.tts_count[my_num] -= 1
         self.openai_client.api_key = config.openai_tokens[my_num]
         res = await self.openai_client.audio.speech.create(**kwargs)
