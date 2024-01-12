@@ -100,8 +100,8 @@ class GPT:
         В данный момент не используется
         """
         try:
-            async with aiohttp.ClientSession(timeout=config.requests_timeout) as aiohttp_session:
-                async with aiohttp_session.get(url) as res:
+            async with aiohttp.ClientSession() as aiohttp_session:
+                async with aiohttp_session.get(url, timeout=config.requests_timeout) as res:
                     res.encoding = 'UTF-8'
                     text = self.html2text_client.handle(await res.text())
                     if len(text) > 2000:
@@ -117,8 +117,8 @@ class GPT:
         Если много, то использует нейросеть от Яндекса 300.ya.ru для выделения главного
         """
         try:
-            async with aiohttp.ClientSession(timeout=config.requests_timeout) as aiohttp_session:
-                async with await aiohttp_session.get(url) as res:
+            async with aiohttp.ClientSession() as aiohttp_session:
+                async with await aiohttp_session.get(url, timeout=config.requests_timeout) as res:
                     res.encoding = 'UTF-8'
                     text = self.html2text_client.handle(await res.text())
                 if len(text) < 2500:
@@ -127,13 +127,13 @@ class GPT:
                     return text
                 auth = f'OAuth {config.ya300_token}'
                 async with await aiohttp_session.post(config.ya300_server, json={"article_url": url},
-                                                      headers={"Authorization": auth}) as response:
+                                                      headers={"Authorization": auth}, timeout=config.requests_timeout) as response:
                     data = await response.json()
 
                 if data["status"] != "success":
                     text = text[:1950] + "..."
                     return text
-                async with aiohttp_session.get(data["sharing_url"]) as res:
+                async with aiohttp_session.get(data["sharing_url"], timeout=config.requests_timeout) as res:
                     res.encoding = 'UTF-8'
                     soup = BeautifulSoup(await res.text(), 'html.parser')
 
@@ -161,14 +161,15 @@ class GPT:
                 'limit': 1,
                 'ckey': "my_test_app"
             }
-            async with aiohttp.ClientSession(timeout=config.requests_timeout) as aiohttp_session:
-                async with aiohttp_session.get(url, params=params) as response:
+            async with aiohttp.ClientSession() as aiohttp_session:
+                async with aiohttp_session.get(url, params=params, timeout=config.requests_timeout) as response:
                     data = await response.json()
                     if len(data['results']) == 0:
                         return "`Не нашлось гифок`"
                     gif_url = data['results'][0]['media_formats']["gif"]["url"]
                     return gif_url
         except Exception as e:
+            traceback.print_exc()
             return f"Ошибка {e}"
 
     async def play_from_text(self, query, message: discord.Message):
