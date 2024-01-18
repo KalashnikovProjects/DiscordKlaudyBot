@@ -3,6 +3,16 @@ import pydub
 
 
 class MixerSourceQue(discord.AudioSource):
+    """
+    Формат music_que - [{
+    "name": "Название",
+    "duration": "3:28",
+    stream: наследник discord.AudioSource или любой другой поток с методом read() -> bytes},]
+
+    Формат talk_que - [{
+    "text": "Текст озвучки",
+    stream: наследник discord.AudioSource или любой другой поток с методом read() -> bytes},]
+    """
     def __init__(self):
         super().__init__()
         self.music_que = []
@@ -24,7 +34,7 @@ class MixerSourceQue(discord.AudioSource):
         for que_type, que in (("music", self.music_que), ("talk", self.talk_que)):
             if len(que) == 0:
                 continue
-            stream = que[0]
+            stream = que[0]["stream"]
             audio_data = stream.read()
             if audio_data == b"":
                 que.pop(0)
@@ -50,7 +60,7 @@ class MixerSourceQue(discord.AudioSource):
 
     def cleanup(self) -> None:
         for stream in self.music_que:
-            stream.cleanup()
+            stream["stream"].cleanup()
         for stream in self.talk_que:
-            stream.cleanup()
+            stream["stream"].cleanup()
         self.music_que, self.talk_que = [], []

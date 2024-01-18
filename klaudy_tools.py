@@ -18,7 +18,7 @@ voice_tools = [
         "type": "function",
         "function": {
             "name": "play_music",
-            "description": f"Используй что бы включить музыку по названию из Youtube, используй ТОЛЬКО если тебя просят это с указанием твоего имени например: Эй, {config.name}, включи OFMG - HELLO",
+            "description": f"Используй что бы включить музыку по названию из Youtube, используй ТОЛЬКО если тебя попросят это, например: Эй, {config.name}, включи OFMG - HELLO",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -35,6 +35,17 @@ voice_tools = [
         "function": {
             "name": "off_music",
             "description": f"Используй что бы выключить музыку, которая сейчас играет, используй ТОЛЬКО если тебя просят это с указанием твоего имени например: Эй, {config.name}, выруби музыку.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        }},
+    {
+        "type": "function",
+        "function": {
+            "name": "get_que",
+            "description": f"Возвращает очередь музыки. Первый трек - играет сейчас.",
             "parameters": {
                 "type": "object",
                 "properties": {},
@@ -70,7 +81,7 @@ text_tools = [
                 "properties": {
                     "url": {
                         "type": "string",
-                        "description": "Ссылка на сайт или статью",
+                        "description": "Ссылка на сайт или статью.",
                     }},
             },
             "required": ["url"],
@@ -104,11 +115,22 @@ text_tools = [
             "required": ["query"],
         },
     },
-{
+    {
         "type": "function",
         "function": {
             "name": "stop_from_text",
             "description": f"Используй что бы выключить музыку, которая сейчас играет в голосовом канале, используй ТОЛЬКО если тебя просят это с указанием твоего имени например: Эй, {config.name}, выруби музыку.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        }},
+    {
+        "type": "function",
+        "function": {
+            "name": "get_que_from_text",
+            "description": f"Возвращает очередь музыки и трек, который играет сейчас.",
             "parameters": {
                 "type": "object",
                 "properties": {},

@@ -65,6 +65,7 @@ class GPT:
                 info_message += f"\nДанный пользователь не является ботом."
             return info_message
         except Exception as e:
+            logging.warning(f"get_member_text - {e}")
             return f"Ошибка {e}"
 
     async def get_member(self, nick, members):
@@ -77,6 +78,7 @@ class GPT:
                 return f"Пользователь {nick} не найден"
             return await self.get_member_text(member)
         except Exception as e:
+            logging.warning(f"get_member - {e}")
             return f"Ошибка {e}"
 
     async def enjoy_voice(self, message: discord.Message):
@@ -92,6 +94,7 @@ class GPT:
             self.voice_connections[message.guild.id] = VoiceConnect(message.author.voice.channel, gpt_obj=self)
             return "Успешно зашёл в голосовой канал"
         except Exception as e:
+            logging.warning(f"enjoy_voice - {e}")
             return f"Ошибка {e}"
 
     async def simple_link_checker(self, url):
@@ -99,6 +102,8 @@ class GPT:
         Версия проверки ссылок без использования нейросети от Яндекса (просто текст страницы)
         В данный момент не используется
         """
+        if not url.startswith('http://') and not url.startswith('https://'):
+            url = f'https://{url}'
         try:
             async with aiohttp.ClientSession() as aiohttp_session:
                 async with aiohttp_session.get(url, timeout=config.requests_timeout) as res:
@@ -108,6 +113,7 @@ class GPT:
                         text = text[:2000]
                     return text
         except Exception as e:
+            logging.warning(f"simple_link_checker - {e}")
             return f"Ошибка {e}"
 
     async def link_checker(self, url):
@@ -116,6 +122,8 @@ class GPT:
         Если текста не много, использует его
         Если много, то использует нейросеть от Яндекса 300.ya.ru для выделения главного
         """
+        if not url.startswith('http://') and not url.startswith('https://'):
+            url = f'https://{url}'
         try:
             async with aiohttp.ClientSession() as aiohttp_session:
                 async with await aiohttp_session.get(url, timeout=config.requests_timeout) as res:
@@ -148,6 +156,7 @@ class GPT:
                         res = res[:1950] + '...'
                     return res
         except Exception as e:
+            logging.warning(f"link_checker - {e}")
             return f"Ошибка {e}"
 
     async def search_gif_on_tenor(self, query):
@@ -169,7 +178,7 @@ class GPT:
                     gif_url = data['results'][0]['media_formats']["gif"]["url"]
                     return gif_url
         except Exception as e:
-            traceback.print_exc()
+            logging.warning(f"search_gif_on_tenor - {e}")
             return f"Ошибка {e}"
 
     async def play_from_text(self, query, message: discord.Message):
@@ -182,8 +191,9 @@ class GPT:
                 voice = self.voice_connections[message.guild.id]
             while voice.mixer_player is None:
                 await asyncio.sleep(0.2)
-            return await voice_music.play_music(query, voice.mixer_player)
+            return f"`{await voice_music.play_music(query, voice.mixer_player)}`"
         except Exception as e:
+            logging.warning(f"play_from_text - {e}")
             return f"`Ошибка {e}`"
 
     async def stop_from_text(self, message: discord.Message):
@@ -193,6 +203,18 @@ class GPT:
                 return "сейчас не играет музыка"
             return await voice_music.off_music(voice.mixer_player)
         except Exception as e:
+            logging.warning(f"stop_from_text - {e}")
+            return f"Ошибка {e}"
+
+    async def get_que_from_text(self, message: discord.Message):
+        try:
+            voice = self.voice_connections.get(message.guild.id)
+            if voice is None:
+                return "сейчас не играет музыка"
+            que = await voice_music.get_que(voice.mixer_player)
+            return f"`{que}`"
+        except Exception as e:
+            logging.warning(f"get_que_from_text - {e}")
             return f"Ошибка {e}"
 
     async def fake_func(self, *args, **kwargs):
@@ -220,7 +242,8 @@ class GPT:
                 available_functions = {
                     # "leave_voice": (lambda: print("Я ливаю", client.disconnect()), ()),  # Отключил, слишком часто использует
                     "play_music": (voice_music.play_music, ("query",)),
-                    "off_music": (voice_music.off_music, ())
+                    "off_music": (voice_music.off_music, ()),
+                    "get_que": (voice_music.get_que, ())
                 }
                 messages.append(resp_message)
                 for tool_call in tool_calls:
@@ -228,10 +251,10 @@ class GPT:
                     function_to_call = available_functions.get(function_name, (self.fake_func, ()))
                     function_args = json.loads(tool_call.function.arguments)
                     kwargs = {a: b for a, b in function_args.items() if a in function_to_call[1]}
-                    if function_name in ("play_music", "off_music"):
+                    if function_name in ("play_music", "off_music", "get_que"):
                         kwargs["mixer"] = self.voice_connections[channel.guild.id].mixer_player
                     function_response = await function_to_call[0](**kwargs)
-                    logging.info(f"ВОЙС: {function_name}, {function_response}")
+                    logging.info(f"tools (ВОЙС): {function_name}, {function_response}")
 
                     messages.append(
                         {
@@ -253,15 +276,17 @@ class GPT:
                 return f"Минутный рейт лимит"
             else:
                 if self.models_dead:
-                    return f"Дневной рейт лимит"
+                    return f"Произошёл какой-то рейт лимит {e.message}"
                 self.models_dead = True
                 self.model_number = (self.model_number + 1) % len(config.models)
                 return await self.voice_gpt(messages, author=author, channel=channel, client=client, voice_history=voice_history)
         except openai.APITimeoutError:
             return f"Таймаут запроса"
         except QueTimoutError:
+            logging.info("Таймаут запросов в очереди")
             return ""
         except Exception as e:
+            logging.error(traceback.format_exc())
             return f"Ошибка {e}"
 
     async def chat_gpt(self, messages, members=None, mes=None):
@@ -282,7 +307,8 @@ class GPT:
                     "link_checker": (self.link_checker, ("url",)),
                     "enjoy_voice": (self.enjoy_voice, ()),
                     "play_from_text": (self.play_from_text, ("query",)),
-                    "stop_from_text": (self.stop_from_text, ())
+                    "stop_from_text": (self.stop_from_text, ()),
+                    "get_que_from_text": (self.get_que_from_text, ())
                     # "get_member": (self.get_member, ("nick",)),  # временно отключено, бот слишком часто её использовал
                 }
                 messages.append(resp_message)
@@ -290,19 +316,18 @@ class GPT:
                 for tool_call in tool_calls:
                     function_name = tool_call.function.name
                     function_to_call = available_functions.get(function_name, (self.fake_func, ()))
-                    print(tool_call.function.arguments)
                     function_args = json.loads(tool_call.function.arguments)
                     kwargs = {a: b for a, b in function_args.items() if a in function_to_call[1]}
                     if function_name == "get_member":
                         kwargs["members"] = members
-                    if function_name in ("enjoy_voice", "play_from_text", "stop_from_text"):
+                    if function_name in ("enjoy_voice", "play_from_text", "stop_from_text", "get_que_from_text"):
                         kwargs["message"] = mes
 
                     function_response = await function_to_call[0](**kwargs)
 
-                    if function_name in ("search_gif_on_tenor", "play_from_text"):
+                    if function_name in ("search_gif_on_tenor", "play_from_text", "get_que_from_text"):
                         urls.append(function_response)
-                    logging.info(f"{function_name}, {function_response}")
+                    logging.info(f"tools: {function_name}, {function_response}")
                     messages.append(
                         {
                             "tool_call_id": tool_call.id,
@@ -333,12 +358,12 @@ class GPT:
                 self.model_number = (self.model_number + 1) % len(config.models)
                 return await self.chat_gpt(messages, mes=mes)
         except openai.APITimeoutError:
-            return f"Произошёл таймаут запроса (ошибка)"
+            return f"Таймаут запроса"
         except QueTimoutError:
+            logging.info("Таймаут запросов в очереди")
             return ""
         except Exception as e:
-            traceback.print_exc()
-            logging.warning(f"Ошибка {e}")
+            logging.error(traceback.format_exc())
             return f"Ошибка {e}"
 
     async def simple_chat_gpt(self, prompt):

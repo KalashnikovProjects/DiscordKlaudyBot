@@ -52,16 +52,18 @@ class BotEventHandler(discord.Client):
     async def on_message(self, message: discord.message.Message):
         if message.author == self.user:
             return
-        if ("@&1175193886591819881" in message.content or
+        if not ("@&1175193886591819881" in message.content or
                 self.user.mentioned_in(message) or
                 message.content.startswith(f"!{config.name}")):
-            async with message.channel.typing():
-                answer = await self.process_brain(message)
-                if answer == "":
-                    return
-                await message.channel.send(answer, reference=message, allowed_mentions=discord.AllowedMentions.all())
+            return
 
-    async def one_message_process(self, mes):
+        async with message.channel.typing():
+            answer = await self.process_brain(message)
+            if answer == "":
+                return
+            await message.channel.send(answer, reference=message, allowed_mentions=discord.AllowedMentions.all())
+
+    async def convert_message_to_dict(self, mes):
         cont = mes.content
         mentions = mes.mentions
         for mention in mentions:
@@ -70,7 +72,7 @@ class BotEventHandler(discord.Client):
             return {"role": "assistant", "content": cont}
         return {"role": "user", "name": str(mes.author.id), "content": f"@{mes.author.name}: {cont}"}
 
-    def result_process(self, s, members):
+    def post_process_result(self, s, members):
         def convert_ping(m):
             ping_name = m.group(0)[1:]
             if ping_name not in members:
@@ -81,6 +83,9 @@ class BotEventHandler(discord.Client):
         return res
 
     def answer_history(self, message: discord.Message, count):
+        """
+        Получает цепочку ответов на сообщения как историю сообщений
+        """
         res = [message]
         while len(res) <= count and res[-1].reference and res[-1].reference.resolved:
             res.append(res[-1].reference.resolved)
@@ -105,13 +110,13 @@ class BotEventHandler(discord.Client):
             count += len(mes.content)
             if count > 7000:
                 break
-            messages.append(await self.one_message_process(mes))
+            messages.append(await self.convert_message_to_dict(mes))
         system_messages.extend(messages[::-1])
         messages = system_messages
         members = {member.name: member for member in message.guild.members}
         chat_answer = await self.gpt.chat_gpt(messages, members=members,
                                               mes=message)
-        res = self.result_process(chat_answer, members)
+        res = self.post_process_result(chat_answer, members)
         return res
 
 

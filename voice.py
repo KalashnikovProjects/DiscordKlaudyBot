@@ -6,6 +6,10 @@ import threading
 from pydub import AudioSegment
 import discord
 from discord.ext import voice_recv
+"""
+Библиотека для расширения voice_recv работает только с нерелизнутой версией discord.py с github
+(discord.py 2.4+)
+"""
 import speech_recognition as sr
 
 import config
@@ -95,7 +99,7 @@ class VoiceConnect:
             logging.info(f"Результат текст: {res}")
             tts_file = await self.create_tts(res)
             audio_source = discord.FFmpegPCMAudio(io.BytesIO(tts_file), executable=config.ffmpeg_local_file, pipe=True)
-            self.mixer_player.add_talk(audio_source)
+            self.mixer_player.add_talk({"text": res, "stream": audio_source})
             self.voice_history.append({"role": "user", "content": query})
             self.voice_history.append({"role": "system", "content": res})
             if len(self.voice_history) > 5:
