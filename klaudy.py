@@ -47,7 +47,7 @@ class BotEventHandler(discord.Client):
 
     async def on_ready(self):
         logging.info(f'Бот подключен к {len(self.guilds)} серверам. {self.user.name} стартует')
-        await asyncio.gather(self.gpt.que_progress(), self.gpt.tts_que_progress())
+        await asyncio.gather(self.gpt.tts_que_progress())
 
     async def on_message(self, message: discord.message.Message):
         if message.author == self.user:
@@ -63,14 +63,14 @@ class BotEventHandler(discord.Client):
                 return
             await message.channel.send(answer, reference=message, allowed_mentions=discord.AllowedMentions.all())
 
-    async def convert_message_to_dict(self, mes):
+    async def convert_message_to_dict(self, mes: discord.Message):
         cont = mes.content
         mentions = mes.mentions
         for mention in mentions:
             cont = cont.replace(f"<@{mention.id}>", f"@{mention.name}")
         if mes.author == self.user:
-            return {"role": "assistant", "content": cont}
-        return {"role": "user", "name": str(mes.author.id), "content": f"@{mes.author.name}: {cont}"}
+            return {"role": "model", "parts": [cont]}
+        return {"role": "user", "parts": [f"@{mes.author.name}: {cont}"]}
 
     def post_process_result(self, s, members):
         def convert_ping(m):
@@ -80,6 +80,8 @@ class BotEventHandler(discord.Client):
             return f"<@{members[ping_name].id}>"
 
         res = re.sub(self.NIK_re, convert_ping, s)
+        if len(res) >= 2000:
+            res = res[:1995] + "..."
         return res
 
     def answer_history(self, message: discord.Message, count):
@@ -91,31 +93,48 @@ class BotEventHandler(discord.Client):
             res.append(res[-1].reference.resolved)
         return res
 
-    async def process_brain(self, message):
-        history = self.answer_history(message, 7)  # message.channel.history(limit=5)
+    async def get_images(self, message: discord.Message):
+        images = []
+
+        # Обработка вложенных изображений
+        for attachment in message.attachments:
+            if attachment.content_type in ("image/png", "image/jpeg", "image/heic", "image/heif", "image/webp"):
+                image_bytes = await attachment.read()
+                images.append({"mime_type": attachment.content_type, "data": image_bytes})
+        return images
+
+    async def process_brain(self, message: discord.Message):
+        history = self.answer_history(message, config.message_history)  # message.channel.history(limit=5)
         count = 0
-        info_message = f"""Информация о чате
+        info_message = f"""[СИСТЕМНАЯ ИНФОРМАЦИЯ] Информация о чате
         Название сервера: {message.guild.name}
         Название канала: {message.channel}"""
         if len(message.guild.members) < 12:
-            info_message += f"\nСписок ников пользователей чата: "
+            info_message += f"  Список ников пользователей чата: "
             for member in message.guild.members:
-                info_message += f"\n{member.display_name}: {member.name}"
+                info_message += f"  {member.display_name}: {member.name}"
 
-        system_messages = [{"role": "system", "content": config.klaudy_knowns},
-                           {"role": "system", "content": info_message}]
+        system_messages = [{"role": "user", "parts": [f"{config.klaudy_knowns}\n{info_message}"]},]
 
         messages = []
         for mes in history:
             count += len(mes.content)
-            if count > 7000:
+            if count > config.max_input_symbols:
                 break
             messages.append(await self.convert_message_to_dict(mes))
+        if messages[-1]["role"] == "user":
+            messages.append({"role": "model", "parts": ["ок"]})
         system_messages.extend(messages[::-1])
         messages = system_messages
         members = {member.name: member for member in message.guild.members}
-        chat_answer = await self.gpt.chat_gpt(messages, members=members,
-                                              mes=message)
+        images = await self.get_images(message)
+        if not images:
+            chat_answer = await self.gpt.generate_answer(messages, members=members,
+                                                         mes=message)
+        else:
+            new_text = f"{messages[0]['parts'][0]} \n {messages[-1]['parts'][0]}"
+            messages = [{"role": "user", "parts": [{"text": new_text}, {"inline_data": images[0]}]}]
+            chat_answer = await self.gpt.generate_image_answer(messages)
         res = self.post_process_result(chat_answer, members)
         return res
 

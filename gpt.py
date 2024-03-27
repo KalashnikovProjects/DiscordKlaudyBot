@@ -1,11 +1,16 @@
 import asyncio
-import json
 import logging
 import time
+
 import aiohttp
 import discord
+import google.api_core.exceptions
 import html2text
+import google.generativeai as genai
 import openai
+from google.generativeai.types import HarmBlockThreshold
+import google.ai.generativelanguage as glm
+
 from bs4 import BeautifulSoup
 import traceback
 
@@ -22,22 +27,33 @@ class QueTimoutError(Exception):
 
 class GPT:
     def __init__(self, bot):
-        self.openai_que = [[] for _ in range(len(config.openai_tokens))]
-        self.openai_message_count = [3 for _ in range(len(config.openai_tokens))]
         self.tts_que = [[] for _ in range(len(config.openai_tokens))]
         self.tts_count = [3 for _ in range(len(config.openai_tokens))]
-        self.model_number = 0
-        self.models_dead = False
         self.html2text_client = html2text.HTML2Text()
         self.html2text_client.ignore_links = True
         self.html2text_client.ignore_images = True
         self.html2text_client.unicode_snob = True
         self.html2text_client.decode_errors = 'replace'
+        self.gemini_model = genai.GenerativeModel(
+            model_name='models/gemini-1.0-pro',
+            generation_config=genai.types.GenerationConfig(
+                candidate_count=1),
+            safety_settings={i: HarmBlockThreshold.BLOCK_NONE for i in range(7, 11)}
+            # Отключаем цензуру, у нас бот токсик
+        )
+        self.gemini_image_model = genai.GenerativeModel(
+            model_name='models/gemini-pro-vision',
+            generation_config=genai.types.GenerationConfig(
+                candidate_count=1),
+            safety_settings={i: HarmBlockThreshold.BLOCK_NONE for i in range(7, 11)}
+            # Отключаем цензуру, у нас бот токсик
+        )
+
         self.openai_client = openai.AsyncOpenAI(
-                api_key=config.openai_token,
-                base_url=config.chatgpt_server,
-                max_retries=0,
-                timeout=config.openai_timeout
+            api_key=config.openai_token,
+            base_url=config.openai_server,
+            max_retries=0,
+            timeout=config.openai_timeout
         )
         self.bot: discord.Client = bot
         self.voice_connections = {}
@@ -135,7 +151,8 @@ class GPT:
                     return text
                 auth = f'OAuth {config.ya300_token}'
                 async with await aiohttp_session.post(config.ya300_server, json={"article_url": url},
-                                                      headers={"Authorization": auth}, timeout=config.requests_timeout) as response:
+                                                      headers={"Authorization": auth},
+                                                      timeout=config.requests_timeout) as response:
                     data = await response.json()
 
                 if data["status"] != "success":
@@ -220,88 +237,102 @@ class GPT:
     async def fake_func(self, *args, **kwargs):
         return "Ты пытаешься вызвать несуществующую функцию"
 
-    async def voice_gpt(self, query, author, channel: discord.VoiceChannel, client: discord.VoiceClient, voice_history):
-        info_message = f"""Информация о голосовом чате
+    def stop_log(self, res):
+        finish_reasons = {1: "баг в Клауди", 2: "лимит длинны запроса/ответа", 3: "цензура блочит", 4: "повторяющиеся токены в запросе", 5: "баг на стороне гуглов"}
+        logging.info(f"Ошибка при генерации ответа {finish_reasons[res.candidates[0].finish_reason]}, {res.candidates[0].safety_ratings}")
+        return f"Ошибка при генерации ответа `{finish_reasons[res.candidates[0].finish_reason]}`"
+
+    async def generate_answer_in_voice(self, query, author, channel: discord.VoiceChannel, client: discord.VoiceClient, voice_history):
+        info_message = f"""[СИСТЕМНАЯ ИНФОРМАЦИЯ] Информация о голосовом чате
                     Название сервера: {channel.guild.name}
                     Название голосового канала: {channel.name}"""
         if len(channel.members) < 12:
             info_message += f"\nСписок ников пользователей голосового чата чата: {', '.join([i.display_name for i in channel.members])}"
-        messages = [{"role": "system", "content": config.klaudy_knowns}, {"role": "system", "content": info_message},
+        messages = [{"role": "user", "parts": [{"text": f"{config.klaudy_knowns}\ninfo_message"}]},
                     *voice_history,
-                    {"role": "user", "content": f"{author.display_name}: {query}"}]
+                    {"role": "user", "parts": [{"text": f"{author.display_name}: {query}"}]}]
+        if messages[1]["role"] == "user":
+            messages.insert(1, {"role": "model", "parts": [{"text": f"ок"}]}, )
         try:
-            res = await self.que_gpt(
-                messages=messages,
-                model=config.models[self.model_number],
-                tools=klaudy_tools.voice_tools, tool_choice="auto",
+            res = self.gemini_model.generate_content(
+                contents=messages,
+                tools=klaudy_tools.voice_tools,
             )
-            await asyncio.sleep(0.1)
-            resp_message = res.choices[0].message
-            if resp_message.tool_calls:
-                tool_calls = resp_message.tool_calls
+            if not res.parts:
+                return self.stop_log(res)
+            if 'function_call' not in res.candidates[0].content.parts[0]:
+                return res.text
+            else:
+                tool_call = res.candidates[0].content.parts[0].function_call
                 available_functions = {
-                    # "leave_voice": (lambda: print("Я ливаю", client.disconnect()), ()),  # Отключил, слишком часто использует
                     "play_music": (voice_music.play_music, ("query",)),
                     "off_music": (voice_music.off_music, ()),
                     "get_que": (voice_music.get_que, ())
+                    # "leave_voice": (lambda: print("Я ливаю", client.disconnect()), ()),  # Отключил, слишком часто использует
                 }
-                messages.append(resp_message)
-                for tool_call in tool_calls:
-                    function_name = tool_call.function.name
-                    function_to_call = available_functions.get(function_name, (self.fake_func, ()))
-                    function_args = json.loads(tool_call.function.arguments)
-                    kwargs = {a: b for a, b in function_args.items() if a in function_to_call[1]}
-                    if function_name in ("play_music", "off_music", "get_que"):
-                        kwargs["mixer"] = self.voice_connections[channel.guild.id].mixer_player
-                    function_response = await function_to_call[0](**kwargs)
-                    logging.info(f"tools (ВОЙС): {function_name}, {function_response}")
-
-                    messages.append(
-                        {
-                            "tool_call_id": tool_call.id,
-                            "role": "tool",
-                            "name": function_name,
-                            "content": function_response,
-                        }
-                    )
-                res = await self.que_gpt(
-                    messages=messages,
-                    model=config.models[self.model_number]
+                func_kwargs = {i: tool_call.args[i] for i in tool_call.args}
+                messages.append(
+                    glm.Content(parts=[glm.Part(
+                        function_call=glm.FunctionCall(
+                            name=tool_call.name,
+                            args=tool_call.args))], role="model")
                 )
-                resp_message = res.choices[0].message
-            self.models_dead = False
-            return resp_message.content
-        except openai.RateLimitError as e:
-            if "RPM" in e.message:
-                return f"Минутный рейт лимит"
-            else:
-                if self.models_dead:
-                    return f"Произошёл какой-то рейт лимит {e.message}"
-                self.models_dead = True
-                self.model_number = (self.model_number + 1) % len(config.models)
-                return await self.voice_gpt(messages, author=author, channel=channel, client=client, voice_history=voice_history)
-        except openai.APITimeoutError:
-            return f"Таймаут запроса"
-        except QueTimoutError:
-            logging.info("Таймаут запросов в очереди")
-            return ""
+
+                function_to_call = available_functions.get(tool_call.name, (self.fake_func, ()))
+
+                if tool_call.name in ("play_music", "off_music", "get_que"):
+                    func_kwargs["mixer"] = self.voice_connections[channel.guild.id].mixer_player
+                function_response = await function_to_call[0](**func_kwargs)
+                logging.info(f"tools (ВОЙС): {tool_call.name}, {function_response}")
+
+                messages.append(
+                    glm.Content(parts=[glm.Part(
+                        function_response=glm.FunctionResponse(
+                            name=tool_call.name,
+                            response={"response": function_response}))], role="function")
+                )
+                res = self.gemini_model.generate_content(contents=messages)
+                if not res.parts:
+                    return self.stop_log(res)
+                result_text = res.text
+                return result_text
+        except google.api_core.exceptions.GoogleAPIError as e:
+            logging.error(traceback.format_exc())
+            return f"Ошибка со стороны гугла `{e}`"
         except Exception as e:
             logging.error(traceback.format_exc())
-            return f"Ошибка {e}"
+            return f"Ошибка `{e}`"
 
-    async def chat_gpt(self, messages, members=None, mes=None):
+    async def generate_image_answer(self, messages):
+        try:
+            res = self.gemini_image_model.generate_content(
+                contents=messages,
+            )
+            if not res.parts:
+                return self.stop_log(res)
+            return res.text
+        except google.api_core.exceptions.GoogleAPIError as e:
+            logging.error(traceback.format_exc())
+            return f"Ошибка со стороны гугла `{e}`"
+        except Exception as e:
+            logging.error(traceback.format_exc())
+            return f"Ошибка `{e}`"
+
+    async def generate_answer(self, messages, members=None, mes=None):
         if members is None:
             members = {}
         try:
-            res = await self.que_gpt(
-                messages=messages,
-                model=config.models[self.model_number],
-                tools=klaudy_tools.text_tools, tool_choice="auto",
+            res = self.gemini_model.generate_content(
+                contents=messages,
+                tools=klaudy_tools.text_tools,
             )
-            await asyncio.sleep(0.1)
-            resp_message = res.choices[0].message
-            if resp_message.tool_calls:
-                tool_calls = resp_message.tool_calls
+            if not res.parts:
+                return self.stop_log(res)
+            if 'function_call' not in res.candidates[0].content.parts[0]:
+                return res.text
+            else:
+                tools_logs = []
+                tool_call = res.candidates[0].content.parts[0].function_call
                 available_functions = {
                     "search_gif_on_tenor": (self.search_gif_on_tenor, ("query",)),
                     "link_checker": (self.link_checker, ("url",)),
@@ -311,103 +342,70 @@ class GPT:
                     "get_que_from_text": (self.get_que_from_text, ())
                     # "get_member": (self.get_member, ("nick",)),  # временно отключено, бот слишком часто её использовал
                 }
-                messages.append(resp_message)
-                urls = []
-                for tool_call in tool_calls:
-                    function_name = tool_call.function.name
-                    function_to_call = available_functions.get(function_name, (self.fake_func, ()))
-                    function_args = json.loads(tool_call.function.arguments)
-                    kwargs = {a: b for a, b in function_args.items() if a in function_to_call[1]}
-                    if function_name == "get_member":
-                        kwargs["members"] = members
-                    if function_name in ("enjoy_voice", "play_from_text", "stop_from_text", "get_que_from_text"):
-                        kwargs["message"] = mes
 
-                    function_response = await function_to_call[0](**kwargs)
-
-                    if function_name in ("search_gif_on_tenor", "play_from_text", "get_que_from_text"):
-                        urls.append(function_response)
-                    logging.info(f"tools: {function_name}, {function_response}")
-                    messages.append(
-                        {
-                            "tool_call_id": tool_call.id,
-                            "role": "tool",
-                            "name": function_name,
-                            "content": function_response,
-                        }
-                    )
-                res = await self.que_gpt(
-                    messages=messages,
-                    model=config.models[self.model_number]
+                func_kwargs = {i: tool_call.args[i] for i in tool_call.args}
+                messages.append(
+                    glm.Content(parts=[glm.Part(
+                        function_call=glm.FunctionCall(
+                            name=tool_call.name,
+                            args=tool_call.args))], role="model")
                 )
-                resp_message = res.choices[0].message
-                for i in urls:
-                    if i not in resp_message:
-                        resp_message.content += f"\n{i}"
+                # messages.append(
+                #     {
+                #         "role": "model",
+                #         "parts": [{
+                #             "functionCall": {
+                #                 "name": tool_call.name,
+                #                 "args": func_kwargs
+                #             }
+                #         }]
+                #     }
+                # )
+                # На данный момент API Gemini находится в бете, и функции из за бага принимает только так
 
-            self.models_dead = False
-            return resp_message.content
-        except openai.RateLimitError as e:
-            # warning(e.message, e.status_code)
-            if "RPM" in e.message:
-                return f"Произошёл минутный рейт лимит ({len(config.openai_tokens) * 3} запроса в минуту, подожди)"
-            else:
-                if self.models_dead:
-                    return f"Произошёл какой-то рейт лимит {e.message}"
-                self.models_dead = True
-                self.model_number = (self.model_number + 1) % len(config.models)
-                return await self.chat_gpt(messages, mes=mes)
-        except openai.APITimeoutError:
-            return f"Таймаут запроса"
-        except QueTimoutError:
-            logging.info("Таймаут запросов в очереди")
-            return ""
+                function_to_call = available_functions.get(tool_call.name, (self.fake_func, ()))
+
+                if tool_call.name == "get_member":
+                    func_kwargs["members"] = members
+                if tool_call.name in ("enjoy_voice", "play_from_text", "stop_from_text", "get_que_from_text"):
+                    func_kwargs["message"] = mes
+
+                function_response = await function_to_call[0](**func_kwargs)
+
+                if tool_call.name in ("search_gif_on_tenor", "play_from_text", "get_que_from_text"):
+                    tools_logs.append(function_response)
+                logging.info(f"tools: {tool_call.name}, {func_kwargs} {function_response}")
+                # messages.append(
+                #     {
+                #         "role": "function",
+                #         "parts": [{
+                #             "functionResponse": {
+                #                 "name": tool_call.name,
+                #                 "response": {"response": function_response}
+                #             }
+                #         }]
+                #     }
+                # )
+                # На данный момент API Gemini находится в бете, и функции из за бага принимает только так
+                messages.append(
+                    glm.Content(parts=[glm.Part(
+                        function_response=glm.FunctionResponse(
+                            name=tool_call.name,
+                            response={"response": function_response}))], role="function")
+                )
+                res = self.gemini_model.generate_content(contents=messages)
+                if not res.parts:
+                    return self.stop_log(res)
+                result_text = res.text
+                for i in tools_logs:
+                    result_text += f"\n{i}"
+                return result_text
+        except google.api_core.exceptions.GoogleAPIError as e:
+            logging.error(traceback.format_exc())
+            return f"Ошибка со стороны гугла `{e}`"
         except Exception as e:
             logging.error(traceback.format_exc())
-            return f"Ошибка {e}"
-
-    async def simple_chat_gpt(self, prompt):
-        # Не используется
-        try:
-            json_data = {"model": config.models[self.model_number], "messages": [{"role": "user", "content": prompt}]}
-            async with aiohttp.ClientSession() as aiohttp_session:
-                async with aiohttp_session.post(config.chatgpt_server, json=json_data,
-                                                headers={"Authorization": f"Bearer {config.openai_token}"}) as res:
-                    res = await res.json()
-                    return res["choices"][0]["message"]["content"]
-        except Exception as e:
-            return f"Ошибка {e}"
-
-    async def timer_reset_gpt(self, my_num):
-        await asyncio.sleep(60)
-        if self.openai_message_count[my_num] != 3:
-            self.openai_message_count[my_num] += 1
-
-    async def que_gpt(self, **kwargs):
-        my_num, _ = max(enumerate(self.openai_message_count), key=lambda x: x[1])
-        if self.openai_que[my_num] or self.openai_message_count[my_num] <= 0:
-            my = time.time()
-            my_num, my_que = min(enumerate(self.openai_que), key=lambda x: len(x[1]))
-            my_que.append(my)
-            while my in self.openai_que[my_num]:
-                await asyncio.sleep(1)
-                if time.time() - my > config.openai_timeout:
-                    my_que.pop(my_que.index(my))
-                    raise QueTimoutError()
-        self.openai_message_count[my_num] -= 1
-        self.openai_client.api_key = config.openai_tokens[my_num]
-        res = await self.openai_client.chat.completions.create(**kwargs)
-        utils.run_in_thread(self.timer_reset_gpt(my_num))
-        return res
-
-    async def que_progress(self):
-        while True:
-            for i in range(len(self.openai_que)):
-                sleep_count = min(len(self.openai_que[i]), self.openai_message_count[i])
-                for _ in range(sleep_count):
-                    self.openai_que[i].pop(0)
-                    await asyncio.sleep(1)
-            await asyncio.sleep(0.1)
+            return f"Ошибка `{e}`"
 
     async def que_tts(self, **kwargs):
         my_num, _ = max(enumerate(self.tts_count), key=lambda x: x[1])
