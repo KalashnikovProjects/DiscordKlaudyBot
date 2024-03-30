@@ -79,7 +79,7 @@ class VoiceConnect:
         await self.exit()
 
     async def exit(self):
-        del self.gpt_obj.voice_connections[self.vch.guild.id]
+        self.gpt_obj.voice_connections.pop(self.vch.guild.id)
         await self.vc.disconnect()
 
     async def process_raw_frames(self, frames, user):
@@ -93,7 +93,7 @@ class VoiceConnect:
             # if "клауди" not in query.lower():
             #     return
 
-            res = await self.gpt_obj.generate_answer_in_voice(query, user, self.vch, self.vc, self.voice_history)
+            res = await self.gpt_obj.generate_answer_in_voice(query, user, self.vch, self.voice_history)
             if not self.vc.is_connected():
                 return
             logging.info(f"Результат текст: {res}")
