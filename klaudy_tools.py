@@ -12,7 +12,7 @@ voice_tools = {'function_declarations': [
     # },
     {
         "name": "play_music",
-        "description": "Включает музыку с Youtube, например: OFMG - HELLO",
+        "description": "Только эта функция может включить музыку, например: OFMG - HELLO",
         "parameters": {
             "type_": "OBJECT",
             "properties": {
@@ -25,7 +25,7 @@ voice_tools = {'function_declarations': [
     },
     {
         "name": "off_music",
-        "description": "Используй что бы выключить музыку и включить следующий трек",
+        "description": "Только эта функция может выключить музыку и включить следующий трек",
         "parameters": {
             "type_": "OBJECT",
             "properties": {},
@@ -34,7 +34,7 @@ voice_tools = {'function_declarations': [
     },
     {
         "name": "get_que",
-        "description": "Возвращает очередь музыки и трек, который сейчас играет.",
+        "description": "Только эта функция может получить реальную очередь музыки и трек, который сейчас играет.",
         "parameters": {
             "type_": "OBJECT",
             "properties": {},
@@ -72,7 +72,7 @@ text_tools = {'function_declarations': [
     },
     {
         "name": "enjoy_voice",
-        "description": "Позволяет присоединиться в голосовой канал к собеседнику",
+        "description": "Только эта функция позволяет присоединиться в голосовой канал к собеседнику",
         "parameters": {
             "type_": "OBJECT",
             "properties": {},
@@ -81,7 +81,7 @@ text_tools = {'function_declarations': [
     },
     {
         "name": "play_from_text",
-        "description": "Включает музыку с Youtube в голосовом канале, например: OFMG - HELLO",
+        "description": "Только эта функция может включить музыку в голосовом канале, например: OFMG - HELLO",
         "parameters": {
             "type_": "OBJECT",
             "properties": {
@@ -94,7 +94,7 @@ text_tools = {'function_declarations': [
     },
     {
         "name": "stop_from_text",
-        "description": "Используй что бы выключить музыку и включить следующий трек",
+        "description": "Только эта функция может выключить музыку и включить следующий трек",
         "parameters": {
             "type_": "OBJECT",
             "properties": {},
@@ -103,7 +103,7 @@ text_tools = {'function_declarations': [
     },
     {
         "name": "get_que_from_text",
-        "description": "Возвращает очередь музыки и трек, который сейчас играет.",
+        "description": "Только эта функция может получить реальную очередь музыки и трек, который сейчас играет.",
         "parameters": {
             "type_": "OBJECT",
             "properties": {},

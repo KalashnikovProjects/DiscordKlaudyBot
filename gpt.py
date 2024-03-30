@@ -281,7 +281,7 @@ class GPT:
                 if tool_call.name in ("play_music", "off_music", "get_que"):
                     func_kwargs["mixer"] = self.voice_connections[channel.guild.id].mixer_player
 
-                function_response = await asyncio.to_thread(function_to_call, **func_kwargs)
+                function_response = await function_to_call(**func_kwargs)
                 logging.info(f"tools (ВОЙС): {tool_call.name}, {function_response}")
 
                 messages.append(
@@ -366,7 +366,7 @@ class GPT:
                 if tool_call.name in ("enjoy_voice", "play_from_text", "stop_from_text", "get_que_from_text"):
                     func_kwargs["message"] = mes
 
-                function_response = await asyncio.to_thread(function_to_call, **func_kwargs)
+                function_response = await function_to_call(**func_kwargs)
 
                 if tool_call.name in ("search_gif_on_tenor", "play_from_text", "get_que_from_text"):
                     tools_logs.append(function_response)
