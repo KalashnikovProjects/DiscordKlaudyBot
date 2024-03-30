@@ -145,9 +145,9 @@ class GPT:
                 async with await aiohttp_session.get(url, timeout=config.requests_timeout) as res:
                     res.encoding = 'UTF-8'
                     text = self.html2text_client.handle(await res.text())
-                if len(text) < 2500:
-                    if len(text) > 2000:
-                        text = text[:1950] + "..."
+                if len(text) < 1200:
+                    if len(text) > 1000:
+                        text = text[:1000] + "..."
                     return text
                 auth = f'OAuth {config.ya300_token}'
                 async with await aiohttp_session.post(config.ya300_server, json={"article_url": url},
@@ -156,7 +156,7 @@ class GPT:
                     data = await response.json()
 
                 if data["status"] != "success":
-                    text = text[:1950] + "..."
+                    text = text[:1000] + "..."
                     return text
                 async with aiohttp_session.get(data["sharing_url"], timeout=config.requests_timeout) as res:
                     res.encoding = 'UTF-8'
@@ -169,8 +169,8 @@ class GPT:
                         if len(i.text) > 2:
                             res += f"{i.text}\n"
 
-                    if len(res) > 2000:
-                        res = res[:1950] + '...'
+                    if len(res) > 1000:
+                        res = res[:1000] + '...'
                     return res
         except Exception as e:
             logging.warning(f"link_checker - {e}")
@@ -254,10 +254,8 @@ class GPT:
         if messages[1]["role"] == "user":
             messages.insert(1, {"role": "model", "parts": [{"text": f"ок"}]}, )
         try:
-            res = self.gemini_model.generate_content(
-                contents=messages,
-                tools=klaudy_tools.voice_tools,
-            )
+            res = await asyncio.to_thread(self.gemini_model.generate_content, contents=messages,
+                                          tools=klaudy_tools.voice_tools)
             if not res.parts:
                 return self.stop_log(res)
             if 'function_call' not in res.candidates[0].content.parts[0]:
@@ -265,24 +263,25 @@ class GPT:
             else:
                 tool_call = res.candidates[0].content.parts[0].function_call
                 available_functions = {
-                    "play_music": (voice_music.play_music, ("query",)),
-                    "off_music": (voice_music.off_music, ()),
-                    "get_que": (voice_music.get_que, ())
+                    "play_music": voice_music.play_music,
+                    "off_music": voice_music.off_music,
+                    "get_que": voice_music.get_que,
                     # "leave_voice": (lambda: print("Я ливаю", client.disconnect()), ()),  # Отключил, слишком часто использует
                 }
-                func_kwargs = {i: tool_call.args[i] for i in tool_call.args}
+
                 messages.append(
                     glm.Content(parts=[glm.Part(
                         function_call=glm.FunctionCall(
                             name=tool_call.name,
                             args=tool_call.args))], role="model")
                 )
+                function_to_call = available_functions.get(tool_call.name, self.fake_func)
 
-                function_to_call = available_functions.get(tool_call.name, (self.fake_func, ()))
-
+                func_kwargs = {i: tool_call.args[i] for i in tool_call.args}
                 if tool_call.name in ("play_music", "off_music", "get_que"):
                     func_kwargs["mixer"] = self.voice_connections[channel.guild.id].mixer_player
-                function_response = await function_to_call[0](**func_kwargs)
+
+                function_response = await asyncio.to_thread(function_to_call, **func_kwargs)
                 logging.info(f"tools (ВОЙС): {tool_call.name}, {function_response}")
 
                 messages.append(
@@ -291,7 +290,7 @@ class GPT:
                             name=tool_call.name,
                             response={"response": function_response}))], role="function")
                 )
-                res = self.gemini_model.generate_content(contents=messages)
+                res = await asyncio.to_thread(self.gemini_model.generate_content, contents=messages)
                 if not res.parts:
                     return self.stop_log(res)
                 result_text = res.text
@@ -322,10 +321,7 @@ class GPT:
         if members is None:
             members = {}
         try:
-            res = self.gemini_model.generate_content(
-                contents=messages,
-                tools=klaudy_tools.text_tools,
-            )
+            res = await asyncio.to_thread(self.gemini_model.generate_content, contents=messages, tools=klaudy_tools.text_tools)
             if not res.parts:
                 return self.stop_log(res)
             if 'function_call' not in res.candidates[0].content.parts[0]:
@@ -334,16 +330,15 @@ class GPT:
                 tools_logs = []
                 tool_call = res.candidates[0].content.parts[0].function_call
                 available_functions = {
-                    "search_gif_on_tenor": (self.search_gif_on_tenor, ("query",)),
-                    "link_checker": (self.link_checker, ("url",)),
-                    "enjoy_voice": (self.enjoy_voice, ()),
-                    "play_from_text": (self.play_from_text, ("query",)),
-                    "stop_from_text": (self.stop_from_text, ()),
-                    "get_que_from_text": (self.get_que_from_text, ())
+                    "search_gif_on_tenor": self.search_gif_on_tenor,
+                    "link_checker": self.link_checker,
+                    "enjoy_voice": self.enjoy_voice,
+                    "play_from_text": self.play_from_text,
+                    "stop_from_text": self.stop_from_text,
+                    "get_que_from_text": self.get_que_from_text,
                     # "get_member": (self.get_member, ("nick",)),  # временно отключено, бот слишком часто её использовал
                 }
 
-                func_kwargs = {i: tool_call.args[i] for i in tool_call.args}
                 messages.append(
                     glm.Content(parts=[glm.Part(
                         function_call=glm.FunctionCall(
@@ -363,14 +358,15 @@ class GPT:
                 # )
                 # На данный момент API Gemini находится в бете, и функции из за бага принимает только так
 
-                function_to_call = available_functions.get(tool_call.name, (self.fake_func, ()))
+                function_to_call = available_functions.get(tool_call.name, self.fake_func)
 
+                func_kwargs = {i: tool_call.args[i] for i in tool_call.args}
                 if tool_call.name == "get_member":
                     func_kwargs["members"] = members
                 if tool_call.name in ("enjoy_voice", "play_from_text", "stop_from_text", "get_que_from_text"):
                     func_kwargs["message"] = mes
 
-                function_response = await function_to_call[0](**func_kwargs)
+                function_response = await asyncio.to_thread(function_to_call, **func_kwargs)
 
                 if tool_call.name in ("search_gif_on_tenor", "play_from_text", "get_que_from_text"):
                     tools_logs.append(function_response)
@@ -393,7 +389,7 @@ class GPT:
                             name=tool_call.name,
                             response={"response": function_response}))], role="function")
                 )
-                res = self.gemini_model.generate_content(contents=messages)
+                res = await asyncio.to_thread(self.gemini_model.generate_content, contents=messages)
                 if not res.parts:
                     return self.stop_log(res)
                 result_text = res.text
