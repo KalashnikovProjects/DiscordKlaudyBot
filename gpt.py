@@ -191,7 +191,7 @@ class GPT:
                     return stop_log(res)
                 result_text = res.text
                 for i in tools_logs:
-                    result_text += f"\n{i}"
+                    result_text += f"\n`{i}`"
                 return result_text
         except google.api_core.exceptions.GoogleAPIError as e:
             logging.error(traceback.format_exc())

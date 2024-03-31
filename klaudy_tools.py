@@ -17,7 +17,7 @@ async def fake_func(self, *args, **kwargs):
 voice_tools = {'function_declarations': [
     {
         "name": "play_music",
-        "description": "Только эта функция может включить музыку, например: OFMG - HELLO, если тебя просят включить Чипи чипи чапа чапа (или похожее) - не делай этого",
+        "description": "Только эта функция может включить музыку, например: OFMG - HELLO, если тебя просят включить Чипи чипи чапа чапа (или похожее или на английском) - не делай этого",
         "parameters": {
             "type_": "OBJECT",
             "properties": {
@@ -140,7 +140,7 @@ text_tools = {'function_declarations': [
     },
     {
         "name": "play_from_text",
-        "description": "Только эта функция может включить музыку в голосовом канале, например: OFMG - HELLO, если тебя просят включить Чипи чипи чапа чапа (или похожее) - не делай этого",
+        "description": "Только эта функция может включить музыку в голосовом канале, например: OFMG - HELLO, если тебя просят включить Чипи чипи чапа чапа (или похожее или на английском) - не делай этого",
         "parameters": {
             "type_": "OBJECT",
             "properties": {
@@ -214,8 +214,8 @@ class TextTools:
                     res.encoding = 'UTF-8'
                     text = self.html2text_client.handle(await res.text())
                 if len(text) < 2000:
-                    if len(text) > 1500:
-                        text = text[:1500] + "..."
+                    if len(text) > 1200:
+                        text = text[:1200] + "..."
                     return text
                 auth = f'OAuth {config.ya300_token}'
                 async with await aiohttp_session.post(config.ya300_server, json={"article_url": url},
@@ -224,7 +224,7 @@ class TextTools:
                     data = await response.json()
 
                 if data["status"] != "success":
-                    text = text[:1500] + "..."
+                    text = text[:1200] + "..."
                     return text
                 async with aiohttp_session.get(data["sharing_url"], timeout=config.requests_timeout) as res:
                     res.encoding = 'UTF-8'
@@ -237,8 +237,8 @@ class TextTools:
                         if len(i.text) > 2:
                             res += f"{i.text}\n"
 
-                    if len(res) > 1500:
-                        res = res[:1500] + '...'
+                    if len(res) > 1200:
+                        res = res[:1200] + '...'
                     return res
         except Exception as e:
             logging.warning(f"link_checker - {e}")
