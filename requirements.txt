@@ -10,7 +10,7 @@ ffmpeg
 pydub~=0.25.1
 discord-ext-voice-recv
 SpeechRecognition
-aiohttp~=3.8.4
+aiohttp~=3.9.2
 yt-dlp
 youtube-search-python
 openai~=1.6.1
