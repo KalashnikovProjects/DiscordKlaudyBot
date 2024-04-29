@@ -16,11 +16,16 @@ openai_tokens = os.environ['openai_tokens'].split(", ")
 openai_token = openai_tokens[0]
 openai_server = "https://openai-middle.glitch.me/v1"
 
-genai.configure(api_key=os.environ["gemini_token"],
-                client_options={"api_endpoint": "vercel-gemini-proxy-teal.vercel.app/api"},
-                transport="rest")
+gemini_tokens = os.environ['gemini_tokens'].split(", ")
+gemini_token = gemini_tokens[0]
+gemini_server = "cheery-baklava-3e2f26.netlify.app"
+gemini_transport = "rest"
 
-message_history = 20
+
+tts_rate_limit = 3
+gemini_15_rate_limit = 2
+
+message_history = 10
 max_input_symbols = 40000
 
 name = "Клауди"
@@ -53,6 +58,5 @@ voice_klaudy_knowns = f"""[СИСТЕМНАЯ ИНФОРМАЦИЯ] Ты - уч�
 
 klaudy_voice = "alloy"
 
-openai_timeout = 500
-que_timeout = 1200  # через 20 минут нахождения в очереди запрос отменяется
+que_timeout = 600  # через 10 минут нахождения в очереди запрос отменяется
 requests_timeout = 100

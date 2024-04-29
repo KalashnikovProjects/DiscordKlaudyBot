@@ -111,5 +111,5 @@ class VoiceConnect:
             logging.warning(f"Ошибка {e} в Speech Recognition")
 
     async def create_tts(self, text):
-        a = await self.gpt_obj.que_tts(input=text, model="tts-1", voice=config.klaudy_voice, speed=0.85)
+        a = await self.gpt_obj.generate_tts(input=text, model="tts-1", voice=config.klaudy_voice, speed=0.85)
         return a.read()

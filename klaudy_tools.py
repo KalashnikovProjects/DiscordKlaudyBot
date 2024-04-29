@@ -11,7 +11,7 @@ from voice import VoiceConnect
 import voice_music
 
 
-async def fake_func(self, *args, **kwargs):
+async def fake_func(*args, **kwargs):
     return "Ты пытаешься вызвать несуществующую функцию"
 
 voice_tools = {'function_declarations': [
@@ -69,7 +69,7 @@ class VoiceTools:
             return f'Включил трек - {res}'
         except Exception as e:
             logging.warning(f"play_music - {e}")
-            return f"Не получилось включить музыку, ошибка"
+            return f"`Не получилось включить музыку, ошибка`"
 
     @staticmethod
     async def off_music(mixer):
@@ -80,7 +80,7 @@ class VoiceTools:
             return "Сейчас не играет никакая музыка."
         except Exception as e:
             logging.warning(f"off_music - {e}")
-            return f"Не получилось выключить музыку, ошибка."
+            return f"`Не получилось выключить музыку, ошибка.`"
 
     @staticmethod
     async def get_que(mixer):
@@ -94,12 +94,12 @@ class VoiceTools:
                     first = False
                 lines.append(text)
             if not lines:
-                return "Очередь музыки пуста"
+                return "`Очередь музыки пуста`"
             return "\n".join(lines)
         except Exception as e:
             # logging.error(f"play_music - {traceback.format_exc()}")
             logging.warning(f"get_que - {e}")
-            return f"Ошибка при получении очереди"
+            return f"`Ошибка при получении очереди`"
 
 
 text_tools = {'function_declarations': [
@@ -279,7 +279,7 @@ class TextTools:
                 await asyncio.sleep(0.2)
             res = await voice_music.play_music(query, voice.mixer_player)
             if not res:
-                return "Ничего не нашлось"
+                return "`Ничего не нашлось`"
             return f'Включил трек - {res}'
         except Exception as e:
             logging.warning(f"play_from_text - {e}")
@@ -318,7 +318,7 @@ class TextTools:
         try:
             voice = self.gpt_obj.voice_connections.get(message.guild.id)
             if voice is None:
-                return "сейчас не играет музыка"
+                return "`сейчас не играет музыка`"
 
             lines = []
             first = True
@@ -329,7 +329,7 @@ class TextTools:
                     first = False
                 lines.append(text)
             if not lines:
-                return "Очередь музыки пуста"
+                return "`Очередь музыки пуста`"
             return "\n".join(lines)
         except Exception as e:
             logging.warning(f"get_que_from_text - {e}")
