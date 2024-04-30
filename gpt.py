@@ -207,13 +207,13 @@ class GPT:
             logging.error(traceback.format_exc())
             return f"Ошибка {e}"
 
-    @utils.api_rate_limiter_with_ques(rate_per_minute=config.tts_rate_limit, tokens=config.openai_tokens)
+    @utils.api_rate_limiter_with_ques(rate_limit=config.tts_rate_limit, tokens=config.openai_tokens)
     async def generate_tts(self, *args, token, **kwargs):
         self.openai_client.api_key = token
         res = await self.openai_client.audio.speech.create(*args, **kwargs)
         return res
 
-    @utils.api_rate_limiter_with_ques(rate_per_minute=config.gemini_15_rate_limit, tokens=config.gemini_tokens)
+    @utils.api_rate_limiter_with_ques(rate_limit=config.gemini_15_rate_limit, tokens=config.gemini_tokens)
     def generate_with_image(self, *args, token, **kwargs):
         genai.configure(api_key=token,
                         client_options={"api_endpoint": config.gemini_server},
