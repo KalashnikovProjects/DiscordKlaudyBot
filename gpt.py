@@ -28,6 +28,7 @@ def generate_function_call(name, args):
     }
 
 
+# noinspection PyTypeChecker
 def generate_function_response(name, function_response):
     return glm.Content(parts=[glm.Part(
         function_response=glm.FunctionResponse(
@@ -67,28 +68,27 @@ class GPT:
         )
 
         no_safety = {i: HarmBlockThreshold.BLOCK_NONE for i in range(7, 11)}
+        # Отключаем цензуру, у нас бот токсик
 
         self.gemini_model = genai.GenerativeModel(
             model_name='models/gemini-1.0-pro',
             generation_config=genai.types.GenerationConfig(
                 candidate_count=1),
             safety_settings=no_safety,
-            # Отключаем цензуру, у нас бот токсик
         )
-        self.gemini_image_model = genai.GenerativeModel(
+        self.gemini_1_5_pro_chat = genai.GenerativeModel(
             model_name='models/gemini-1.5-pro-latest',
             generation_config=genai.types.GenerationConfig(
                 candidate_count=1),
-            system_instruction=config.klaudy_knowns,
             safety_settings=no_safety,
-            # Отключаем цензуру, у нас бот токсик
+            system_instruction=config.klaudy_knowns,
         )
-        self.gemini_voice_model = genai.GenerativeModel(
-            model_name='models/gemini-1.0-pro',
+        self.gemini_1_5_pro_voice = genai.GenerativeModel(
+            model_name='models/gemini-1.5-pro-latest',
             generation_config=genai.types.GenerationConfig(
                 candidate_count=1),
             safety_settings=no_safety,
-            # Отключаем цензуру, у нас бот токсик
+            system_instruction=config.voice_klaudy_knowns,
         )
 
         genai.configure(api_key=config.gemini_token,
@@ -98,21 +98,19 @@ class GPT:
         self.voice_tools = klaudy_tools.VoiceTools()
         self.text_tools = klaudy_tools.TextTools(gpt_obj=self)
 
-    async def generate_answer_in_voice(self, query, author, channel: discord.VoiceChannel, voice_history):
+    async def generate_answer_from_voice(self, wav_data, author, channel: discord.VoiceChannel):
         info_message = f"""\n[СИСТЕМНАЯ ИНФОРМАЦИЯ] Информация о голосовом чате
                     Название сервера: {channel.guild.name}
                     Название голосового канала: {channel.name}"""
-        if len(channel.members) < 12:
-            info_message += f"\nСписок ников пользователей голосового чата чата: {', '.join([i.display_name for i in channel.members])}"
-        messages = [{"role": "user", "parts": [{"text": f"{config.klaudy_knowns}\ninfo_message"}]},
-                    *voice_history,
-                    {"role": "user", "parts": [{"text": f"{author.display_name}: {query}"}]}]
-        if messages[1]["role"] == "user":
-            messages.insert(1, {"role": "model", "parts": [{"text": f"ок"}]})
+        if len(channel.members) < config.members_info_limit:
+            info_message += f"\nСписок ников пользователей голосового чата: {', '.join([i.display_name for i in channel.members])}"
+        messages = [{"role": "user", "parts": [{"text": info_message}]},
+                    {"role": "model", "parts": [{"text": f"ок"}]},
+                    {"role": "user", "parts": [{"text": f"{author.display_name} (голосовое сообщение)"}, {"inline_data": {"data": wav_data, "mime_type": "audio/wav"}}]},]
         try:
-            res = await asyncio.to_thread(self.gemini_voice_model.generate_content, contents=messages,
-                                          tools=klaudy_tools.voice_tools,
-                                          request_options={'timeout': 100, 'retry': google.api_core.retry.Retry()})
+            res = await asyncio.to_thread(self.generate_gemini_1_5_pro, model=self.gemini_1_5_pro_voice,
+                                          contents=messages,
+                                          tools=klaudy_tools.voice_tools)
             if not res.parts:
                 return stop_log(res)
             func_call = [i.function_call for i in res.candidates[0].content.parts if "function_call" in i]
@@ -133,8 +131,8 @@ class GPT:
                 logging.info(f"tools (ВОЙС): {tool_call.name}, {function_response}")
 
                 messages.append(generate_function_response(tool_call.name, function_response))
-                res = await asyncio.to_thread(self.gemini_voice_model.generate_content, contents=messages,
-                                              request_options={'timeout': 100, 'retry': google.api_core.retry.Retry()})
+                res = await asyncio.to_thread(self.generate_gemini_1_5_pro, model=self.gemini_1_5_pro_voice,
+                                              contents=messages)
                 if not res.parts:
                     return stop_log(res)
                 result_text = res.text
@@ -146,20 +144,17 @@ class GPT:
             logging.error(traceback.format_exc())
             return f"Ошибка {e}"
 
-    async def generate_answer(self, messages, images=False, members=None, mes=None):
+    async def generate_answer(self, messages, have_files=False, members=None, mes=None):
         if members is None:
             members = {}
         try:
-            if images:
-                res = await asyncio.to_thread(self.generate_with_image, contents=messages,
-                                              tools=klaudy_tools.text_tools,
-                                              request_options={'timeout': 100,
-                                                               'retry': google.api_core.retry.Retry()})
+            if have_files:
+                res = await asyncio.to_thread(self.generate_gemini_1_5_pro, model=self.gemini_1_5_pro_chat, contents=messages,
+                                              tools=klaudy_tools.text_tools)
                 # self.gemini_voice_model._system_instruction = google.generativeai.types.content_types.to_content(info)
             else:
                 res = await asyncio.to_thread(self.gemini_model.generate_content, contents=messages,
-                                              tools=klaudy_tools.text_tools,
-                                              request_options={'timeout': 100, 'retry': google.api_core.retry.Retry()})
+                                              tools=klaudy_tools.text_tools)
             if not res.parts:
                 return stop_log(res)
             func_call = [i.function_call for i in res.candidates[0].content.parts if "function_call" in i]
@@ -186,14 +181,10 @@ class GPT:
                 logging.info(f"tools: {tool_call.name}, {func_kwargs} {function_response}")
 
                 messages.append(generate_function_response(tool_call.name, function_response))
-                if images:
-                    res = await asyncio.to_thread(self.generate_with_image, contents=messages,
-                                                  request_options={'timeout': 100,
-                                                                   'retry': google.api_core.retry.Retry()})
+                if have_files:
+                    res = await asyncio.to_thread(self.generate_gemini_1_5_pro, model=self.gemini_1_5_pro_chat, contents=messages)
                 else:
-                    res = await asyncio.to_thread(self.gemini_model.generate_content, contents=messages,
-                                                  request_options={'timeout': 100,
-                                                                   'retry': google.api_core.retry.Retry()})
+                    res = await asyncio.to_thread(self.gemini_model.generate_content, contents=messages)
                 if not res.parts:
                     return stop_log(res)
                 result_text = res.text
@@ -207,17 +198,19 @@ class GPT:
             logging.error(traceback.format_exc())
             return f"Ошибка {e}"
 
+    # Токен выбирается декоратором
     @utils.api_rate_limiter_with_ques(rate_limit=config.tts_rate_limit, tokens=config.openai_tokens)
-    async def generate_tts(self, *args, token, **kwargs):
+    async def generate_tts(self, *args, token=None, **kwargs):
         self.openai_client.api_key = token
         res = await self.openai_client.audio.speech.create(*args, **kwargs)
         return res
 
+    # Токен выбирается декоратором
     @utils.api_rate_limiter_with_ques(rate_limit=config.gemini_15_rate_limit, tokens=config.gemini_tokens)
-    def generate_with_image(self, *args, token, **kwargs):
+    def generate_gemini_1_5_pro(self, *args, model, token=None, **kwargs):
         genai.configure(api_key=token,
                         client_options={"api_endpoint": config.gemini_server},
                         transport=config.gemini_transport, )
 
-        res = self.gemini_image_model.generate_content(*args, **kwargs)
+        res = model.generate_content(*args, **kwargs)
         return res

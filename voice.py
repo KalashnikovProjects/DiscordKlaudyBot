@@ -29,7 +29,6 @@ class VoiceConnect:
         self.users_frames = {}
         self.vch = vch
         self.gpt_obj = gpt_obj
-        self.voice_history = []
         utils.run_in_thread(self.enter_voice(vch, vc=vc))
 
     def process_callback(self, user, data: voice_recv.VoiceData):
@@ -85,30 +84,22 @@ class VoiceConnect:
     async def process_raw_frames(self, frames, user):
         try:
             source = b''.join(frames)
-            audio = AudioSegment(source, sample_width=2, frame_rate=48000, channels=2)
-            with sr.AudioFile(audio.export(format="wav")) as source:
-                audio_data_wav = recognizer.record(source)
-            query = recognizer.recognize_wit(audio_data_wav, config.wit_token)
-            logging.info(f"Распознанный текст: {query}")
-            # if "клауди" not in query.lower():
-            #     return
-
-            res = await self.gpt_obj.generate_answer_in_voice(query, user, self.vch, self.voice_history)
+            audio = AudioSegment(source, sample_width=2, frame_rate=48000, channels=2).export(format="wav").read()
+            logging.info("Аудио отправляется")
+            res = await self.gpt_obj.generate_answer_from_voice(audio, user, self.vch)
             if not self.vc.is_connected():
                 return
             logging.info(f"Результат текст: {res}")
             tts_file = await self.create_tts(res)
             audio_source = discord.FFmpegPCMAudio(io.BytesIO(tts_file), executable=config.ffmpeg_local_file, pipe=True)
-            self.mixer_player.add_talk({"text": res, "stream": audio_source})
-            self.voice_history.append({"role": "user", "parts": [query]})
 
-            self.voice_history.append({"role": "model", "parts": [res]})
-            if len(self.voice_history) > 5:
-                self.voice_history = self.voice_history[-5:]
+            self.mixer_player.add_talk({"text": res, "stream": audio_source})
         except sr.UnknownValueError:
             return
         except sr.RequestError as e:
             logging.warning(f"Ошибка {e} в Speech Recognition")
+        except Exception as e:
+            logging.warning(f"Ошибка {e} в в process_raw_frames")
 
     async def create_tts(self, text):
         a = await self.gpt_obj.generate_tts(input=text, model="tts-1", voice=config.klaudy_voice, speed=0.85)

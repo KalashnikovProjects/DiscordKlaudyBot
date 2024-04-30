@@ -97,7 +97,7 @@ class BotEventHandler(discord.Client):
                 return
             await message.channel.send(answer, reference=message, allowed_mentions=discord.AllowedMentions.all())
 
-    async def convert_message_to_dict(self, mes: discord.Message, with_images=False):
+    async def convert_message_to_dict(self, mes: discord.Message, with_files=False):
         cont = mes.content
         mentions = mes.mentions
         for mention in mentions:
@@ -106,7 +106,7 @@ class BotEventHandler(discord.Client):
             res = {"role": "model", "parts": [{"text": cont}]}
         else:
             res = {"role": "user", "parts": [{"text": f"@{mes.author.name}: {cont}"}]}
-        if with_images:
+        if with_files:
             images = await get_images(mes)
             if images:
                 res["parts"].append({"inline_data": images[0]})
@@ -130,7 +130,7 @@ class BotEventHandler(discord.Client):
         info_message = f"""[СИСТЕМНАЯ ИНФОРМАЦИЯ] Информация о чате
         Название сервера: {message.guild.name}
         Название канала: {message.channel}"""
-        if len(message.guild.members) < 30:
+        if len(message.guild.members) < config.members_info_limit:
             info_message += f"  Список ников пользователей чата: "
             for member in message.guild.members:
                 info_message += f"{member.display_name}: {member.name}"
@@ -145,9 +145,12 @@ class BotEventHandler(discord.Client):
             count += len(mes.content)
             if count > config.max_input_symbols:
                 break
-            messages.append(await self.convert_message_to_dict(mes, len(images) != 0))
+            messages.append(await self.convert_message_to_dict(mes, with_files=len(images) != 0 and not config.only_last_message_with_files))
         messages = messages[::-1]
         messages.insert(0, {"role": "user", "parts": [{"text": system_message}]})
+
+        if images and config.only_last_message_with_files:
+            messages[-1]["parts"].append({"inline_data": images[0]})
         messages = normalize_history(messages)
 
         # info = None
@@ -160,7 +163,7 @@ class BotEventHandler(discord.Client):
         #     messages = normalize_history(messages)
         #     info = system_message
 
-        chat_answer = await self.gpt.generate_answer(messages, images=len(images) != 0, members=members, mes=message)
+        chat_answer = await self.gpt.generate_answer(messages, have_files=len(images) != 0, members=members, mes=message)
         res = self.post_process_result(chat_answer, members)
         return res
 
