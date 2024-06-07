@@ -36,7 +36,7 @@ async def play_music(query, mixer):
     source = await from_url(video['link'])
     music = {"name": video["title"],
              "duration": video["duration"],
-             "stream": discord.FFmpegPCMAudio(source, executable=config.ffmpeg_local_file,
+             "stream": discord.FFmpegPCMAudio(source, executable=config.ffmpeg_file,
                                               before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5")}
     mixer.add_music(music)
     return video["title"]

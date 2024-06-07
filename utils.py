@@ -1,4 +1,5 @@
 import asyncio
+import io
 import logging
 import queue
 import threading
@@ -33,7 +34,20 @@ def background_rate_limit_que_process(rate_ques, last_request_time, rate_limit_t
         time.sleep(0.1)
 
 
-def api_rate_limiter_with_ques(rate_limit, tokens, timeout=config.que_timeout, rate_limit_time=60):
+def api_rate_limiter_with_ques(rate_limit, tokens, timeout=config.que_to_generate_timeout, rate_limit_time=60):
+    """
+    Декоратор, устанавливает для функции рейт лимит с очередью, с поддержкой нескольких токенов (несколько очередей)
+    Декорируемая функция обязательно должна принимать аргумент token, он в неё передается из декоратора
+
+    Аргументы декоратора:
+    tokens - список токенов (для случаев когда есть несколько аккаунтов с отдельными лимитами, иначе 1 элемент),
+    timeout - таймаут нахождения элемента в очереди
+    rate_limit - лимит вызовов функции,
+    rate_limit_time=60 - лимит за какое время
+
+    Задачи на которые не хватило лимита откладываются в очередь, элементы очереди -
+    threading.Event(), евенты подаются в отдельном треде, wrapper функция ждёт евента и запускается.
+    """
     rate_ques = [queue.Queue() for _ in tokens]
     last_request_time = [[time.time() - rate_limit_time for _ in range(rate_limit)] for _ in tokens]
 

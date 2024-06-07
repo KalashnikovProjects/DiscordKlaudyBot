@@ -7,11 +7,11 @@ class MixerSourceQue(discord.AudioSource):
     Формат music_que - [{
     "name": "Название",
     "duration": "3:28",
-    stream: наследник discord.AudioSource или любой другой поток с методом read() -> bytes},]
+    stream: наследник discord.AudioSource или любой другой поток с методом read() -> bytes (20мс аудио)},]
 
     Формат talk_que - [{
-    "text": "Текст озвучки",
-    stream: наследник discord.AudioSource или любой другой поток с методом read() -> bytes},]
+    "author": "Кто говорит",
+    "stream": наследник discord.AudioSource или любой другой поток с методом read() -> bytes (20мс аудио)},]
     """
     def __init__(self):
         super().__init__()
@@ -27,6 +27,12 @@ class MixerSourceQue(discord.AudioSource):
     def skip_music(self):
         self.music_que.pop(0)
 
+    def get_music_que(self):
+        return self.music_que
+
+    def get_talk_que(self):
+        return self.talk_que
+
     def read(self) -> bytes:
         mixed_frame = pydub.AudioSegment.silent(duration=20, frame_rate=48000)
 
@@ -35,6 +41,8 @@ class MixerSourceQue(discord.AudioSource):
             if len(que) == 0:
                 continue
             stream = que[0]["stream"]
+            if que_type == "talk":
+                ...
             audio_data = stream.read()
             if audio_data == b"":
                 que.pop(0)

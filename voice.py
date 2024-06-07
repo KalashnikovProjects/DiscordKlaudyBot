@@ -1,23 +1,48 @@
 import asyncio
 import datetime
 import io
+import itertools
 import logging
 import threading
+import io
+
+import elevenlabs
 from pydub import AudioSegment
 import discord
 from discord.ext import voice_recv
+from elevenlabs.client import ElevenLabs
+
 """
 Библиотека для расширения voice_recv работает только с нерелизнутой версией discord.py с github
 (discord.py 2.4+)
 """
-import speech_recognition as sr
 
 import config
 import mixer
 import utils
 
-recognizer = sr.Recognizer()
-recognizer.operation_timeout = 60
+
+def write_iterator_to_stream(stream, iterator) -> io.BytesIO:
+    for chunk in iterator:
+        stream.write(chunk)
+        stream.seek(0)
+    return stream
+
+
+class GenerateAudioStreamWithRead20ms:
+    def __init__(self, audio_bytes_io, sample_rate, bit_depth=16, channels=1):
+        self.audio_bytes_io = audio_bytes_io
+        bytes_per_second = (sample_rate * bit_depth * channels) // 8
+        self.chunk_size = (bytes_per_second * 20) // 1000
+
+    def write(self, stream):
+        self.audio_bytes_io.write(stream)
+
+    def read(self):
+        return self.audio_bytes_io.read(self.chunk_size)
+
+    def clean_up(self):
+        self.audio_bytes_io.close()
 
 
 class VoiceConnect:
@@ -67,13 +92,15 @@ class VoiceConnect:
                 if not self.vch or len(self.vch.members) <= 1:
                     break
                 for user, state in self.users_recording_states.items():
-                    if len(self.users_frames[user]) > 30 and datetime.datetime.now() - state["last_package_time"] > datetime.timedelta(seconds=2.5):
-
+                    if len(self.users_frames[user]) > 30 and datetime.datetime.now() - state[
+                            "last_package_time"] > datetime.timedelta(seconds=2.5):
                         data = self.users_frames[user].copy()
                         self.users_frames[user] = []
-                        self.users_recording_states[user] = {"last_package_time": datetime.datetime(2000, month=1, day=1)}
+                        self.users_recording_states[user] = {
+                            "last_package_time": datetime.datetime(2000, month=1, day=1)}
                         utils.run_in_thread(self.process_raw_frames(data, user))
-            except Exception:
+            except Exception as e:
+                logging.debug(f"Ошибка {e} при обработке frame'ов.")
                 continue
         await self.exit()
 
@@ -86,21 +113,40 @@ class VoiceConnect:
             source = b''.join(frames)
             audio = AudioSegment(source, sample_width=2, frame_rate=48000, channels=2).export(format="wav").read()
             logging.info("Аудио отправляется")
-            res = await self.gpt_obj.generate_answer_from_voice(audio, user, self.vch)
+            text_stream = await self.gpt_obj.generate_stream_answer_fom_voice(audio, user, self.vch)
             if not self.vc.is_connected():
                 return
-            logging.info(f"Результат текст: {res}")
-            tts_file = await self.create_tts(res)
-            audio_source = discord.FFmpegPCMAudio(io.BytesIO(tts_file), executable=config.ffmpeg_local_file, pipe=True)
+            speech_bytes_iterator = await self.create_tts(text_stream)
 
-            self.mixer_player.add_talk({"text": res, "stream": audio_source})
-        except sr.UnknownValueError:
-            return
-        except sr.RequestError as e:
-            logging.warning(f"Ошибка {e} в Speech Recognition")
+            speech_stream = io.BytesIO()
+            audio_stream_source = GenerateAudioStreamWithRead20ms(speech_stream, 22050, 16, 1)
+
+            threading.Thread(target=write_iterator_to_stream, args=(audio_stream_source, speech_bytes_iterator))
+
+            self.mixer_player.add_talk({"author": config.BotConfig.name, "stream": audio_stream_source})
         except Exception as e:
             logging.warning(f"Ошибка {e} в в process_raw_frames")
 
-    async def create_tts(self, text):
-        a = await self.gpt_obj.generate_tts(input=text, model="tts-1", voice=config.klaudy_voice, speed=0.85)
-        return a.read()
+    # @utils.api_rate_limiter_with_ques(rate_limit=config.ElevenLabs.rate_limit, tokens=config.ElevenLabs.tokens)
+    async def create_tts(self, text_stream, token=config.ElevenLabs.token):
+        # text_stream, text_stream_for_log = itertools.tee(text_stream, 2)
+
+        # def log():
+        #     for text in text_stream_for_log:
+        #         logging.debug(f"Пришёл кусок текста на tts: {text}")
+        #
+        # threading.Thread(target=log).start()
+        client = ElevenLabs(api_key=token)
+
+        result = client.text_to_speech.convert_realtime(
+            text=text_stream,
+            voice_id=config.ElevenLabs.voice_id,
+            voice_settings=elevenlabs.VoiceSettings()
+        )
+        result, for_sus_test = itertools.tee(result, 2)
+        def sus_testing():
+            for bytes_alo in for_sus_test:
+                logging.debug(f"Пришли байты на sus test: {bytes_alo}")
+
+        threading.Thread(target=sus_testing).start()
+        return result

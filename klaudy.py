@@ -78,7 +78,7 @@ class BotEventHandler(discord.Client):
 
         intents = discord.Intents.all()
         intents.message_content = True
-        super().__init__(intents=intents, command_prefix=f"!{config.name}")
+        super().__init__(intents=intents, command_prefix=f"!{config.BotConfig.name}")
 
     async def on_ready(self):
         logging.info(f'Бот подключен к {len(self.guilds)} серверам. {self.user.name} стартует')
@@ -88,7 +88,7 @@ class BotEventHandler(discord.Client):
             return
         if not ("@&1175193886591819881" in message.content or
                 self.user.mentioned_in(message) or
-                message.content.startswith(f"!{config.name}")):
+                message.content.startswith(f"!{config.BotConfig.name}")):
             return
 
         async with message.channel.typing():
@@ -125,52 +125,37 @@ class BotEventHandler(discord.Client):
         return res
 
     async def process_brain(self, message: discord.Message):
-        history = await get_answer_history(message, config.message_history)  # message.channel.history(limit=5)
-        count = 0
-        info_message = f"""[СИСТЕМНАЯ ИНФОРМАЦИЯ] Информация о чате
-        Название сервера: {message.guild.name}
-        Название канала: {message.channel}"""
-        if len(message.guild.members) < config.members_info_limit:
-            info_message += f"  Список ников пользователей чата: "
+        chat_info = f"""Информация о чате \nНазвание сервера: {message.guild.name} \nНазвание канала: {message.channel} \nСписок пользователей чата: """
+        if len(message.guild.members) < config.BotConfig.members_info_limit:
+            chat_info += f""
             for member in message.guild.members:
-                info_message += f"{member.display_name}: {member.name}"
-
-        system_message = f"{config.klaudy_knowns}\n{info_message}"
-
-        images = await get_images(message)
-        members = {member.name: member for member in message.guild.members}
+                chat_info += f" {member.display_name}: {member.name};"
 
         messages = []
+        count = 0
+        history = await get_answer_history(message, config.BotConfig.message_history)  # message.channel.history(limit=5)
         for mes in history:
             count += len(mes.content)
-            if count > config.max_input_symbols:
+            if count > config.BotConfig.max_input_symbols:
                 break
-            messages.append(await self.convert_message_to_dict(mes, with_files=len(images) != 0 and not config.only_last_message_with_files))
+            messages.append(await self.convert_message_to_dict(mes, with_files=not config.BotConfig.only_last_message_with_files))
         messages = messages[::-1]
-        messages.insert(0, {"role": "user", "parts": [{"text": system_message}]})
 
-        if images and config.only_last_message_with_files:
-            messages[-1]["parts"].append({"inline_data": images[0]})
+        if config.BotConfig.only_last_message_with_files:
+            images = await get_images(message)
+            if images:
+                messages[-1]["parts"].append({"inline_data": images[0]})
         messages = normalize_history(messages)
 
-        # info = None
-        # if not images:
-        #     messages.insert(0, {"role": "user", "parts": [{"text": system_message}]})
-        #     messages = normalize_history(messages)
-        # else:
-        #     if messages[0]["role"] == "model":
-        #         messages.pop(0)
-        #     messages = normalize_history(messages)
-        #     info = system_message
-
-        chat_answer = await self.gpt.generate_answer(messages, have_files=len(images) != 0, members=members, mes=message)
+        members = {member.name: member for member in message.guild.members}
+        chat_answer = await self.gpt.generate_answer(messages, members=members, mes=message, additional_info=chat_info)
         res = self.post_process_result(chat_answer, members)
         return res
 
 
 def main():
     bot = BotEventHandler()
-    bot.run(config.discord_token)
+    bot.run(config.Discord.token)
 
 
 if __name__ == "__main__":

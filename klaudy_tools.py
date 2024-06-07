@@ -213,12 +213,12 @@ class TextTools:
                 async with await aiohttp_session.get(url, timeout=config.requests_timeout) as res:
                     res.encoding = 'UTF-8'
                     text = self.html2text_client.handle(await res.text())
-                if len(text) < 2000:
+                if len(text) < 4000:
                     if len(text) > 1200:
                         text = text[:1200] + "..."
                     return text
-                auth = f'OAuth {config.ya300_token}'
-                async with await aiohttp_session.post(config.ya300_server, json={"article_url": url},
+                auth = f'OAuth {config.Ya300.token}'
+                async with await aiohttp_session.post(config.Ya300.server, json={"article_url": url},
                                                       headers={"Authorization": auth},
                                                       timeout=config.requests_timeout) as response:
                     data = await response.json()
@@ -247,8 +247,8 @@ class TextTools:
     @staticmethod
     async def search_gif_on_tenor(query):
         try:
-            api_key = config.tenor_token
-            url = config.tenor_server
+            api_key = config.Tenor.token
+            url = config.Tenor.server
 
             params = {
                 'q': query,
@@ -322,7 +322,7 @@ class TextTools:
 
             lines = []
             first = True
-            for i in voice.mixer_player.music_que:
+            for i in voice.mixer_player.get_music_que():
                 text = f"{i['name']} - {i['duration'] if i['duration'] is not None else 'прямая трансляция'}"
                 if first:
                     text = f"Сейчас играет: {text}"
