@@ -2,17 +2,17 @@ Flask
 gunicorn
 requests
 discord.py @git+https://github.com/Rapptz/discord.py
-google-generativeai~=0.5.4
+google-generativeai~=0.7.0
 html2text~=2020.1.16
 beautifulsoup4~=4.12.2
-SpeechRecognition
 ffmpeg
 pydub~=0.25.1
 discord-ext-voice-recv
-SpeechRecognition
 aiohttp~=3.9.2
 yt-dlp
 youtube-search-python
 google
 pytube~=15.0.0
+elevenlabs
 python-dotenv
+retry

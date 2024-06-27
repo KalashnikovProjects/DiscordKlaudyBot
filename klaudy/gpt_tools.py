@@ -1,14 +1,13 @@
 import asyncio
 import logging
-
 import aiohttp
 import discord
 import html2text
 from bs4 import BeautifulSoup
 
-import config
-from voice import VoiceConnect
-import voice_music
+from . import config
+from .voice import VoiceConnect
+from . import voice_music
 
 
 async def fake_func(*args, **kwargs):
@@ -17,12 +16,12 @@ async def fake_func(*args, **kwargs):
 voice_tools = {'function_declarations': [
     {
         "name": "play_music",
-        "description": "Только эта функция может включить музыку, например: OFMG - HELLO, если тебя просят включить Чипи чипи чапа чапа (или похожее или на английском) - не делай этого",
+        "description": "включить музыку, например: OFMG - HELLO, если тебя просят включить Чипи чипи чапа чапа (или похожее или на английском) - не делай этого",
         "parameters": {
-            "type_": "OBJECT",
+            "type": "object",
             "properties": {
                 "query": {
-                    "type_": "STRING",
+                    "type": "string",
                     "description": "Запрос для поиска на Youtube",
                 }},
             "required": ["query"],
@@ -30,19 +29,27 @@ voice_tools = {'function_declarations': [
     },
     {
         "name": "off_music",
-        "description": "Только эта функция может выключить музыку и включить следующий трек",
+        "description": "выключить музыку и включить следующий трек из очереди",
         "parameters": {
-            "type_": "OBJECT",
-            "properties": {},
+            "type": "object",
+            "properties": {
+                "mixer": {
+                    "type": "string",
+                    "description": "Комментарий",
+                }},
             "required": [],
         },
     },
     {
         "name": "get_que",
-        "description": "Только эта функция может получить реальную очередь музыки и трек, который сейчас играет.",
+        "description": "получить очередь музыки и трек, который сейчас играет.",
         "parameters": {
-            "type_": "OBJECT",
-            "properties": {},
+            "type": "object",
+            "properties": {
+                "mixer": {
+                    "type": "string",
+                    "description": "Комментарий",
+                }},
             "required": [],
         },
     },
@@ -51,7 +58,7 @@ voice_tools = {'function_declarations': [
     #     "name": "leave_voice",
     #     "description": "Используй что бы выйти из голосового канала",
     #     "parameters": {
-    #         "type_": "OBJECT",
+    #         "type": "object",
     #         "properties": {},
     #         "required": [],
     #     },
@@ -105,12 +112,12 @@ class VoiceTools:
 text_tools = {'function_declarations': [
     {
         "name": "search_gif_on_tenor",
-        "description": "находит ссылку на gif (гифку) по любой теме с помощью Tenor.",
+        "description": "найти ссылку на gif (гифку) по любой теме с помощью Tenor.",
         "parameters": {
-            "type_": "OBJECT",
+            "type": "object",
             "properties": {
                 "query": {
-                    "type_": "STRING",
+                    "type": "string",
                     "description": "Запрос для поиска",
                 }},
             "required": ["query"],
@@ -120,10 +127,10 @@ text_tools = {'function_declarations': [
         "name": "link_checker",
         "description": "Просматривает содержимое сайта, если на нём много текста напишет его краткий пересказ",
         "parameters": {
-            "type_": "OBJECT",
+            "type": "object",
             "properties": {
                 "url": {
-                    "type_": "STRING",
+                    "type": "string",
                     "description": "Ссылка на сайт или статью.",
                 }},
             "required": ["url"],
@@ -131,21 +138,25 @@ text_tools = {'function_declarations': [
     },
     {
         "name": "enjoy_voice",
-        "description": "Только эта функция позволяет присоединиться в голосовой канал к собеседнику",
+        "description": "присоединиться в голосовой канал к собеседнику",
         "parameters": {
-            "type_": "OBJECT",
-            "properties": {},
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "description": "Комментарий",
+                }},
             "required": [],
         },
     },
     {
         "name": "play_from_text",
-        "description": "Только эта функция может включить музыку в голосовом канале, например: OFMG - HELLO, если тебя просят включить Чипи чипи чапа чапа (или похожее или на английском) - не делай этого",
+        "description": "включить музыку в голосовом канале, например: OFMG - HELLO, если тебя просят включить Чипи чипи чапа чапа (или похожее или на английском) - не делай этого",
         "parameters": {
-            "type_": "OBJECT",
+            "type": "object",
             "properties": {
                 "query": {
-                    "type_": "STRING",
+                    "type": "string",
                     "description": "Запрос для поиска на Youtube",
                 }},
             "required": ["query"],
@@ -153,19 +164,27 @@ text_tools = {'function_declarations': [
     },
     {
         "name": "stop_from_text",
-        "description": "Только эта функция может выключить музыку и включить следующий трек",
+        "description": "выключить музыку и включить следующий трек в очереди",
         "parameters": {
-            "type_": "OBJECT",
-            "properties": {},
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "description": "Комментарий",
+                }},
             "required": [],
         },
     },
     {
         "name": "get_que_from_text",
-        "description": "Только эта функция может получить реальную очередь музыки и трек, который сейчас играет.",
+        "description": "получить очередь музыки и трек, который сейчас играет.",
         "parameters": {
-            "type_": "OBJECT",
-            "properties": {},
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "description": "Комментарий",
+                }},
             "required": [],
         },
     },
@@ -190,7 +209,7 @@ class TextTools:
             url = f'https://{url}'
         try:
             async with aiohttp.ClientSession() as aiohttp_session:
-                async with aiohttp_session.get(url, timeout=config.requests_timeout) as res:
+                async with aiohttp_session.get(url, timeout=config.REQUESTS_TIMEOUT) as res:
                     res.encoding = 'UTF-8'
                     text = self.html2text_client.handle(await res.text())
                     if len(text) > 2000:
@@ -210,7 +229,7 @@ class TextTools:
             url = f'https://{url}'
         try:
             async with aiohttp.ClientSession() as aiohttp_session:
-                async with await aiohttp_session.get(url, timeout=config.requests_timeout) as res:
+                async with await aiohttp_session.get(url, timeout=config.REQUESTS_TIMEOUT) as res:
                     res.encoding = 'UTF-8'
                     text = self.html2text_client.handle(await res.text())
                 if len(text) < 4000:
@@ -220,13 +239,13 @@ class TextTools:
                 auth = f'OAuth {config.Ya300.token}'
                 async with await aiohttp_session.post(config.Ya300.server, json={"article_url": url},
                                                       headers={"Authorization": auth},
-                                                      timeout=config.requests_timeout) as response:
+                                                      timeout=config.REQUESTS_TIMEOUT) as response:
                     data = await response.json()
 
                 if data["status"] != "success":
                     text = text[:1200] + "..."
                     return text
-                async with aiohttp_session.get(data["sharing_url"], timeout=config.requests_timeout) as res:
+                async with aiohttp_session.get(data["sharing_url"], timeout=config.REQUESTS_TIMEOUT) as res:
                     res.encoding = 'UTF-8'
                     soup = BeautifulSoup(await res.text(), 'html.parser')
 
@@ -257,7 +276,7 @@ class TextTools:
                 'ckey': "my_test_app"
             }
             async with aiohttp.ClientSession() as aiohttp_session:
-                async with aiohttp_session.get(url, params=params, timeout=config.requests_timeout) as response:
+                async with aiohttp_session.get(url, params=params, timeout=config.REQUESTS_TIMEOUT) as response:
                     data = await response.json()
                     if len(data['results']) == 0:
                         return "`Не нашлось гифок`"

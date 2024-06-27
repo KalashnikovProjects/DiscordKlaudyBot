@@ -1,8 +1,8 @@
 from youtubesearchpython.__future__ import VideosSearch
-
 import discord
 from yt_dlp import YoutubeDL
-import config
+
+from . import config
 
 ytdl_format_options = {
     'format': 'bestaudio/best',
@@ -29,14 +29,14 @@ async def from_url(url):
 
 
 async def play_music(query, mixer):
-    response = await VideosSearch(query, limit=1, timeout=config.requests_timeout).next()
+    response = await VideosSearch(query, limit=1, timeout=config.REQUESTS_TIMEOUT).next()
     if not response["result"]:
         return None
     video = response["result"][0]
     source = await from_url(video['link'])
     music = {"name": video["title"],
              "duration": video["duration"],
-             "stream": discord.FFmpegPCMAudio(source, executable=config.ffmpeg_file,
+             "stream": discord.FFmpegPCMAudio(source, executable=config.FFMPEG_FILE,
                                               before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5")}
     mixer.add_music(music)
     return video["title"]

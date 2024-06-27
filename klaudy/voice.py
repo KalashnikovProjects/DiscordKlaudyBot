@@ -1,15 +1,13 @@
 import asyncio
 import datetime
-import io
-import itertools
 import logging
 import threading
 import io
 
-import elevenlabs
-from pydub import AudioSegment
 import discord
 from discord.ext import voice_recv
+from pydub import AudioSegment
+import elevenlabs
 from elevenlabs.client import ElevenLabs
 
 """
@@ -17,15 +15,14 @@ from elevenlabs.client import ElevenLabs
 (discord.py 2.4+)
 """
 
-import config
-import mixer
-import utils
+from . import config
+from . import mixer
+from . import utils
 
 
 def write_iterator_to_stream(stream, iterator) -> io.BytesIO:
     for chunk in iterator:
         stream.write(chunk)
-        stream.seek(0)
     return stream
 
 
@@ -35,13 +32,18 @@ class GenerateAudioStreamWithRead20ms:
         bytes_per_second = (sample_rate * bit_depth * channels) // 8
         self.chunk_size = (bytes_per_second * 20) // 1000
 
-    def write(self, stream):
-        self.audio_bytes_io.write(stream)
+    def write(self, chunk):
+        self.audio_bytes_io.write(chunk)
+        logging.debug(f"Записал чанк в поток: {chunk}")
 
     def read(self):
-        return self.audio_bytes_io.read(self.chunk_size)
+        self.audio_bytes_io.seek(0)
+        res = self.audio_bytes_io.read(self.chunk_size)
+        logging.debug(f"Читаю аудио из потока: {res}")
+        return res
 
     def clean_up(self):
+        ...
         self.audio_bytes_io.close()
 
 
@@ -113,40 +115,32 @@ class VoiceConnect:
             source = b''.join(frames)
             audio = AudioSegment(source, sample_width=2, frame_rate=48000, channels=2).export(format="wav").read()
             logging.info("Аудио отправляется")
-            text_stream = await self.gpt_obj.generate_stream_answer_fom_voice(audio, user, self.vch)
+            text = await self.gpt_obj.generate_answer_for_voice(audio, user, self.vch)
             if not self.vc.is_connected():
                 return
-            speech_bytes_iterator = await self.create_tts(text_stream)
+            speech_bytes_iterator = await self.create_tts(text)
 
             speech_stream = io.BytesIO()
             audio_stream_source = GenerateAudioStreamWithRead20ms(speech_stream, 22050, 16, 1)
-
-            threading.Thread(target=write_iterator_to_stream, args=(audio_stream_source, speech_bytes_iterator))
-
+            write_iterator_to_stream(audio_stream_source, speech_bytes_iterator)
+            # threading.Thread(target=write_iterator_to_stream, args=(audio_stream_source, speech_bytes_iterator))
             self.mixer_player.add_talk({"author": config.BotConfig.name, "stream": audio_stream_source})
+
+            # speech_bytes = io.BytesIO()
+            # for speech_bytes_it in speech_bytes_iterator:
+            #     speech_bytes.write(speech_bytes_it)
+            # audio_source = discord.FFmpegPCMAudio(speech_bytes, executable=config.FFMPEG_FILE, pipe=True)
+            # self.mixer_player.add_talk({"author": config.BotConfig.name, "stream": audio_source})
         except Exception as e:
             logging.warning(f"Ошибка {e} в в process_raw_frames")
 
     # @utils.api_rate_limiter_with_ques(rate_limit=config.ElevenLabs.rate_limit, tokens=config.ElevenLabs.tokens)
-    async def create_tts(self, text_stream, token=config.ElevenLabs.token):
-        # text_stream, text_stream_for_log = itertools.tee(text_stream, 2)
-
-        # def log():
-        #     for text in text_stream_for_log:
-        #         logging.debug(f"Пришёл кусок текста на tts: {text}")
-        #
-        # threading.Thread(target=log).start()
+    async def create_tts(self, text, token=config.ElevenLabs.token):
         client = ElevenLabs(api_key=token)
 
-        result = client.text_to_speech.convert_realtime(
-            text=text_stream,
+        result = client.text_to_speech.convert_as_stream(
+            text=text,
             voice_id=config.ElevenLabs.voice_id,
-            voice_settings=elevenlabs.VoiceSettings()
+            voice_settings=elevenlabs.VoiceSettings(stability=0.5, similarity_boost=0.6),
         )
-        result, for_sus_test = itertools.tee(result, 2)
-        def sus_testing():
-            for bytes_alo in for_sus_test:
-                logging.debug(f"Пришли байты на sus test: {bytes_alo}")
-
-        threading.Thread(target=sus_testing).start()
         return result

@@ -1,33 +1,9 @@
 import logging
 import discord
-import config
-from gpt import GPT
 import re
 
-
-class CustomFormatter(logging.Formatter):
-    green = "\x1b[32;20m"
-    blue = "\x1b[34;20m"
-    yellow = "\x1b[33;20m"
-    red = "\x1b[31;20m"
-    white = "\x1b[0m"
-    bold_red = "\x1b[31;1m"
-    reset = "\x1b[0m"
-    format = "%(asctime)s (%(filename)-12s:%(lineno)-4d) %(levelname)-8s %(message)s"
-
-    FORMATS = {
-        logging.DEBUG: blue + format + reset,
-        logging.INFO: green + format + reset,
-        logging.WARNING: yellow + format + reset,
-        logging.ERROR: red + format + reset,
-        logging.CRITICAL: bold_red + format + reset,
-        "default": white + format + reset
-    }
-
-    def format(self, record):
-        log_fmt = self.FORMATS.get(record.levelno, self.FORMATS["default"])
-        formatter = logging.Formatter(log_fmt)
-        return formatter.format(record)
+from . import config
+from .gpt import GPT
 
 
 async def get_answer_history(message: discord.Message, count):
@@ -66,13 +42,21 @@ async def get_images(message: discord.Message):
     return images
 
 
+def generate_chat_info(message: discord.Message):
+    chat_info = f"""Информация о чате \nНазвание сервера: {message.guild.name} \nНазвание канала: {message.channel} \nСписок пользователей чата: """
+    if len(message.guild.members) < config.BotConfig.members_info_limit:
+        chat_info += f""
+        for member in message.guild.members:
+            chat_info += f" {member.display_name}: {member.name};"
+    return chat_info
+
+
+def get_members(message: discord.Message):
+    return {member.name: member for member in message.guild.members}
+
+
 class BotEventHandler(discord.Client):
     def __init__(self):
-        logger = logging.getLogger()
-        logger.setLevel(config.log_level)
-        console = logging.StreamHandler()
-        logger.addHandler(console)
-        console.setFormatter(CustomFormatter())
         self.NIK_re = re.compile(r"@[0-9a-zA-Z._]{3,}")
         self.gpt = GPT(self)
 
@@ -95,7 +79,31 @@ class BotEventHandler(discord.Client):
             answer = await self.process_brain(message)
             if answer == "":
                 return
-            await message.channel.send(answer, reference=message, allowed_mentions=discord.AllowedMentions.all())
+        await message.channel.send(answer, reference=message, allowed_mentions=discord.AllowedMentions(users=True, replied_user=True))
+
+    async def process_brain(self, message: discord.Message):
+        chat_info = generate_chat_info(message)
+
+        history = await get_answer_history(message, config.BotConfig.message_history)  # message.channel.history(limit=5)
+        messages = await self.convert_history_to_messages(history, config.BotConfig.max_input_symbols, config.BotConfig.file_history)
+        members = get_members(message)
+
+        chat_answer = await self.gpt.generate_answer(messages, members=members, mes=message, additional_info=chat_info)
+        res = self.convert_ai_answer_to_message_text(chat_answer, members)
+        return res
+
+    async def convert_history_to_messages(self, history, max_input_symbols, file_history):
+        messages = []
+        count = 0
+
+        for n, mes in enumerate(history):
+            count += len(mes.content)
+            if count > max_input_symbols:
+                break
+            messages.append(await self.convert_message_to_dict(mes, with_files=n <= file_history))
+        messages = messages[::-1]
+        messages = normalize_history(messages)
+        return messages
 
     async def convert_message_to_dict(self, mes: discord.Message, with_files=False):
         cont = mes.content
@@ -112,7 +120,7 @@ class BotEventHandler(discord.Client):
                 res["parts"].append({"inline_data": images[0]})
         return res
 
-    def post_process_result(self, s, members):
+    def convert_ai_answer_to_message_text(self, s, members):
         def convert_ping(m):
             ping_name = m.group(0)[1:]
             if ping_name not in members:
@@ -124,39 +132,7 @@ class BotEventHandler(discord.Client):
             res = res[:1995] + "..."
         return res
 
-    async def process_brain(self, message: discord.Message):
-        chat_info = f"""Информация о чате \nНазвание сервера: {message.guild.name} \nНазвание канала: {message.channel} \nСписок пользователей чата: """
-        if len(message.guild.members) < config.BotConfig.members_info_limit:
-            chat_info += f""
-            for member in message.guild.members:
-                chat_info += f" {member.display_name}: {member.name};"
 
-        messages = []
-        count = 0
-        history = await get_answer_history(message, config.BotConfig.message_history)  # message.channel.history(limit=5)
-        for mes in history:
-            count += len(mes.content)
-            if count > config.BotConfig.max_input_symbols:
-                break
-            messages.append(await self.convert_message_to_dict(mes, with_files=not config.BotConfig.only_last_message_with_files))
-        messages = messages[::-1]
-
-        if config.BotConfig.only_last_message_with_files:
-            images = await get_images(message)
-            if images:
-                messages[-1]["parts"].append({"inline_data": images[0]})
-        messages = normalize_history(messages)
-
-        members = {member.name: member for member in message.guild.members}
-        chat_answer = await self.gpt.generate_answer(messages, members=members, mes=message, additional_info=chat_info)
-        res = self.post_process_result(chat_answer, members)
-        return res
-
-
-def main():
+def run_bot():
     bot = BotEventHandler()
     bot.run(config.Discord.token)
-
-
-if __name__ == "__main__":
-    main()

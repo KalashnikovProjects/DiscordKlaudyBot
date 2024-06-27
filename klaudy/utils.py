@@ -1,11 +1,9 @@
 import asyncio
-import io
-import logging
 import queue
 import threading
 import time
 
-import config
+from . import config
 
 
 class QueTimoutError(Exception):
@@ -34,7 +32,7 @@ def background_rate_limit_que_process(rate_ques, last_request_time, rate_limit_t
         time.sleep(0.1)
 
 
-def api_rate_limiter_with_ques(rate_limit, tokens, timeout=config.que_to_generate_timeout, rate_limit_time=60):
+def api_rate_limiter_with_ques(rate_limit, tokens, timeout=config.QUE_TO_GENERATE_TIMEOUT, rate_limit_time=60):
     """
     Декоратор, устанавливает для функции рейт лимит с очередью, с поддержкой нескольких токенов (несколько очередей)
     Декорируемая функция обязательно должна принимать аргумент token, он в неё передается из декоратора
