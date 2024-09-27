@@ -35,7 +35,7 @@ def normalize_history(history):
 async def get_files(message: discord.Message):
     inline_data = []
     file_data = []
-    need_upload = any([(i.size / 1024 / 1024 > 19 or i.content_type.split("/")[0] == "video") for i in message.attachments])
+    need_upload = any([(i.size / 1024 / 1024 > 19 or i.content_type.split("/")[0] == "video") for i in message.attachments if i.content_type])
 
     for attachment in message.attachments:
         data = await attachment.read()
