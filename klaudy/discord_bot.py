@@ -41,7 +41,7 @@ async def get_files(message: discord.Message):
         data = await attachment.read()
 
         if need_upload:
-            uri = await upload_file(attachment)
+            uri = await upload_file(data, attachment.content_type, attachment.filename)
             file_data.append({"mime_type": attachment.content_type, "file_uri": uri})
         else:
             inline_data.append({"mime_type": attachment.content_type, "data": data})

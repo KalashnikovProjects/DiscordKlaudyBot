@@ -1,9 +1,11 @@
 import asyncio
+import json
 import logging
 import os
 import random
 import traceback
 
+import aiohttp
 from retry import retry
 import discord
 
@@ -59,23 +61,48 @@ def stop_log(res):
     return f"Ошибка при генерации ответа `{finish_reasons[res.candidates[0].finish_reason]}`"
 
 
-async def upload_file(attachment):
+async def upload_file(data, content_type, filename):
     r = random.randint(0, 1000000000)
-    await attachment.save(f"tmp/{r}-{attachment.filename}")
-    try:
-        file = genai.upload_file(f"tmp/{r}-{attachment.filename}")
-        while file.state.name == "PROCESSING":
+    num_bytes = len(data)
+
+    headers = {
+        "X-Goog-Upload-Protocol": "resumable",
+        "X-Goog-Upload-Command": "start",
+        "X-Goog-Upload-Header-Content-Length": str(num_bytes),
+        "X-Goog-Upload-Header-Content-Type": content_type,
+        "Content-Type": "application/json"
+    }
+    json_data = json.dumps({"file": {"display_name": f"{r}-{filename}"}})
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            f"https://{config.Gemini.server}/upload/v1beta/files?key={config.Gemini.token}&alt=json&uploadType=resumable",
+            headers=headers,
+            data=json_data
+        ) as response:
+            upload_url = response.headers.get("Location")
+
+        headers = {
+            "Content-Length": str(num_bytes),
+            "X-Goog-Upload-Offset": "0",
+            "X-Goog-Upload-Command": "upload, finalize"
+        }
+        async with session.post(upload_url, headers=headers, data=data) as response:
+            file_info = await response.json()
+
+        file_uri = file_info["file"]["uri"]
+        state = file_info["file"]["state"]
+
+        print("uploading file", end="")
+        while state == "PROCESSING":
             print(".", end="")
             await asyncio.sleep(0.5)
-            file = genai.get_file(file.name)
-
+            file = genai.get_file(file_info["file"]["name"])
+            state = file.state.name
         if file.state.name == "FAILED":
             raise ValueError(file.state.name)
-    except Exception as e:
-        os.remove(f"tmp/{r}-{attachment.filename}")
-        raise e
-    os.remove(f"tmp/{r}-{attachment.filename}")
-    return file.uri
+
+    return file_uri
 
 
 class GPT:
