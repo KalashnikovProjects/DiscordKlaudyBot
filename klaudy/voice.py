@@ -6,45 +6,13 @@ import io
 
 import discord
 from discord.ext import voice_recv
+from elevenlabs import AsyncElevenLabs
 from pydub import AudioSegment
 import elevenlabs
-from elevenlabs.client import ElevenLabs
-
-"""
-Библиотека для расширения voice_recv работает только с нерелизнутой версией discord.py с github
-(discord.py 2.4+)
-"""
 
 from . import config
 from . import mixer
 from . import utils
-
-
-def write_iterator_to_stream(stream, iterator) -> io.BytesIO:
-    for chunk in iterator:
-        stream.write(chunk)
-    return stream
-
-
-class GenerateAudioStreamWithRead20ms:
-    def __init__(self, audio_bytes_io, sample_rate, bit_depth=16, channels=1):
-        self.audio_bytes_io = audio_bytes_io
-        bytes_per_second = (sample_rate * bit_depth * channels) // 8
-        self.chunk_size = (bytes_per_second * 20) // 1000
-
-    def write(self, chunk):
-        self.audio_bytes_io.write(chunk)
-        logging.debug(f"Записал чанк в поток: {chunk}")
-
-    def read(self):
-        self.audio_bytes_io.seek(0)
-        res = self.audio_bytes_io.read(self.chunk_size)
-        logging.debug(f"Читаю аудио из потока: {res}")
-        return res
-
-    def clean_up(self):
-        ...
-        self.audio_bytes_io.close()
 
 
 class VoiceConnect:
@@ -120,27 +88,24 @@ class VoiceConnect:
                 return
             speech_bytes_iterator = await self.create_tts(text)
 
-            speech_stream = io.BytesIO()
-            audio_stream_source = GenerateAudioStreamWithRead20ms(speech_stream, 22050, 16, 1)
-            write_iterator_to_stream(audio_stream_source, speech_bytes_iterator)
-            # threading.Thread(target=write_iterator_to_stream, args=(audio_stream_source, speech_bytes_iterator))
-            self.mixer_player.add_talk({"author": config.BotConfig.name, "stream": audio_stream_source})
-
-            # speech_bytes = io.BytesIO()
-            # for speech_bytes_it in speech_bytes_iterator:
-            #     speech_bytes.write(speech_bytes_it)
-            # audio_source = discord.FFmpegPCMAudio(speech_bytes, executable=config.FFMPEG_FILE, pipe=True)
-            # self.mixer_player.add_talk({"author": config.BotConfig.name, "stream": audio_source})
+            buffer = io.BytesIO()
+            async for chunk in speech_bytes_iterator:
+                if chunk is not None:
+                    buffer.write(chunk)
+            buffer.seek(0)
+            audio_source = discord.FFmpegPCMAudio(buffer, executable=config.FFMPEG_FILE, pipe=True)
+            self.mixer_player.add_talk({"author": config.BotConfig.name, "stream": audio_source})
         except Exception as e:
             logging.warning(f"Ошибка {e} в в process_raw_frames")
 
     # @utils.api_rate_limiter_with_ques(rate_limit=config.ElevenLabs.rate_limit, tokens=config.ElevenLabs.tokens)
     async def create_tts(self, text, token=config.ElevenLabs.token):
-        client = ElevenLabs(api_key=token)
+        client = AsyncElevenLabs(api_key=token)
 
-        result = client.text_to_speech.convert_as_stream(
+        result = await client.generate(
             text=text,
-            voice_id=config.ElevenLabs.voice_id,
-            voice_settings=elevenlabs.VoiceSettings(stability=0.5, similarity_boost=0.6),
+            voice=config.ElevenLabs.voice_id,
+            model="eleven_turbo_v2_5",
+            voice_settings=elevenlabs.VoiceSettings(stability=0.4, similarity_boost=0.7, style=0.2),
         )
         return result

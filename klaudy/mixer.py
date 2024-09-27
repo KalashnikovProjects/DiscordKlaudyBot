@@ -43,8 +43,6 @@ class MixerSourceQue(discord.AudioSource):
             stream = que[0]["stream"]
 
             audio_data = stream.read()
-            if que_type == "talk":
-                print(audio_data)
             if audio_data == b"":
                 que.pop(0)
                 continue
