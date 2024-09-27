@@ -1,6 +1,9 @@
 import asyncio
 import logging
+import os
+import random
 import traceback
+
 from retry import retry
 import discord
 
@@ -11,6 +14,11 @@ from google.generativeai.types import HarmBlockThreshold
 from . import config
 from . import gpt_tools
 from . import utils
+
+
+genai.configure(api_key=config.Gemini.token,
+                client_options={"api_endpoint": config.Gemini.server},
+                transport=config.Gemini.transport)
 
 
 def generate_function_call(name, args):
@@ -49,6 +57,25 @@ def stop_log(res):
         f"Ошибка при генерации ответа {finish_reasons[res.candidates[0].finish_reason]}, {res.candidates[0].safety_ratings}")
     logging.debug(res)
     return f"Ошибка при генерации ответа `{finish_reasons[res.candidates[0].finish_reason]}`"
+
+
+async def upload_file(attachment):
+    r = random.randint(0, 1000000000)
+    await attachment.save(f"tmp/{r}-{attachment.filename}")
+    try:
+        file = genai.upload_file(f"tmp/{r}-{attachment.filename}")
+        while file.state.name == "PROCESSING":
+            print(".", end="")
+            await asyncio.sleep(0.5)
+            file = genai.get_file(file.name)
+
+        if file.state.name == "FAILED":
+            raise ValueError(file.state.name)
+    except Exception as e:
+        os.remove(f"tmp/{r}-{attachment.filename}")
+        raise e
+    os.remove(f"tmp/{r}-{attachment.filename}")
+    return file.uri
 
 
 class GPT:

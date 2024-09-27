@@ -3,7 +3,7 @@ import discord
 import re
 
 from . import config
-from .gpt import GPT
+from .gpt import GPT, upload_file
 
 
 async def get_answer_history(message: discord.Message, count):
@@ -32,14 +32,20 @@ def normalize_history(history):
     return res
 
 
-async def get_images(message: discord.Message):
-    images = []
+async def get_files(message: discord.Message):
+    inline_data = []
+    file_data = []
+    need_upload = any([(i.size / 1024 / 1024 > 19 or i.content_type.split("/")[0] == "video") for i in message.attachments])
 
-    # Обработка вложенных изображений
     for attachment in message.attachments:
-        image_bytes = await attachment.read()
-        images.append({"mime_type": attachment.content_type, "data": image_bytes})
-    return images
+        data = await attachment.read()
+
+        if need_upload:
+            uri = await upload_file(attachment)
+            file_data.append({"mime_type": attachment.content_type, "file_uri": uri})
+        else:
+            inline_data.append({"mime_type": attachment.content_type, "data": data})
+    return inline_data, file_data
 
 
 def generate_chat_info(message: discord.Message):
@@ -115,9 +121,11 @@ class BotEventHandler(discord.Client):
         else:
             res = {"role": "user", "parts": [{"text": f"@{mes.author.name}: {cont}"}]}
         if with_files:
-            images = await get_images(mes)
-            if images:
-                res["parts"].append({"inline_data": images[0]})
+            inline_data, file_data = await get_files(mes)
+            if inline_data:
+                res["parts"].extend([{"inline_data": image} for image in inline_data])
+            if file_data:
+                res["parts"].extend([{"file_data": image} for image in file_data])
         return res
 
     def convert_ai_answer_to_message_text(self, s, members):
