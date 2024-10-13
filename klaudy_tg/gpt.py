@@ -119,6 +119,7 @@ class GPT:
 
         self.text_tools = gpt_tools.TextTools(gpt_obj=self)
 
+    @retry(tries=3, delay=2)
     async def generate_answer(self, messages, additional_info=""):
         try:
             model = genai.GenerativeModel(
@@ -158,7 +159,6 @@ class GPT:
                 if not res.parts:
                     return stop_log(res)
                 result_text = res.text
-                print([result_text, ])
                 for i in tools_logs:
                     result_text += f"{i}\n"
                 return result_text
