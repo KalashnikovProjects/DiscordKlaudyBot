@@ -1,8 +1,11 @@
 import asyncio
+import json
 import logging
+import random
 import traceback
+
+import aiohttp
 from retry import retry
-import discord
 
 import google.api_core.exceptions
 import google.generativeai as genai
@@ -11,6 +14,11 @@ from google.generativeai.types import HarmBlockThreshold
 from . import config
 from . import gpt_tools
 from . import utils
+
+
+genai.configure(api_key=config.Gemini.token,
+                client_options={"api_endpoint": config.Gemini.server},
+                transport=config.Gemini.transport)
 
 
 def generate_function_call(name, args):
@@ -23,6 +31,54 @@ def generate_function_call(name, args):
             }
         }]
     }
+
+
+async def upload_file(data, content_type, filename):
+    r = random.randint(0, 1000000000)
+    num_bytes = len(data)
+
+    headers = {
+        "X-Goog-Upload-Protocol": "resumable",
+        "X-Goog-Upload-Command": "start",
+        "X-Goog-Upload-Header-Content-Length": str(num_bytes),
+        "Content-Type": "application/json"
+    }
+    if content_type:
+        headers['X-Goog-Upload-Header-Content-Type'] = content_type
+    json_data = json.dumps({"file": {"display_name": f"{r}-{filename}"}})
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            f"https://{config.Gemini.server}/upload/v1beta/files?key={config.Gemini.token}&alt=json&uploadType=resumable",
+            headers=headers,
+            data=json_data
+        ) as response:
+            upload_url = response.headers.get("Location")
+
+        headers = {
+            "Content-Length": str(num_bytes),
+            "X-Goog-Upload-Offset": "0",
+            "X-Goog-Upload-Command": "upload, finalize"
+        }
+        async with session.post(upload_url, headers=headers, data=data) as response:
+            file_info = await response.json()
+
+        file_uri = file_info["file"]["uri"]
+        state = file_info["file"]["state"]
+
+        logging.info("uploading file")
+        if state == "ACTIVE":
+            return file_uri
+        while state == "PROCESSING":
+            await asyncio.sleep(0.5)
+            file = genai.get_file(file_info["file"]["name"])
+            state = file.state.name
+        if not file:
+            raise ValueError(state)
+        if file.state.name == "FAILED":
+            raise ValueError(file.state.name)
+
+    return file_uri
 
 
 # noinspection PyTypeChecker
@@ -52,10 +108,7 @@ def stop_log(res):
 
 
 class GPT:
-    def __init__(self, bot):
-        self.voice_connections = {}
-        self.bot: discord.Client = bot
-
+    def __init__(self):
         self.generation_config = genai.types.GenerationConfig(
             temperature=config.Gemini.temperature,
             max_output_tokens=config.Gemini.max_output_tokens,
@@ -64,59 +117,9 @@ class GPT:
         self.no_safety = {i: HarmBlockThreshold.BLOCK_NONE for i in range(7, 11)}
         # Отключаем цензуру, у нас бот токсик
 
-        self.voice_tools = gpt_tools.VoiceTools()
         self.text_tools = gpt_tools.TextTools(gpt_obj=self)
 
-    async def generate_answer_for_voice(self, wav_data, author, channel: discord.VoiceChannel):
-        try:
-            additional_info = f"Информация о голосовом чате\nНазвание сервера: {channel.guild.name}\nНазвание голосового канала: {channel.name}\nСписок ников пользователей голосового чата: "
-            if len(channel.members) < config.BotConfig.members_info_limit:
-                for member in channel.members:
-                    additional_info += f"{member.display_name}: {member.name}; "
-            model = genai.GenerativeModel(
-                model_name=config.Gemini.main_model,
-                generation_config=self.generation_config,
-                safety_settings=self.no_safety,
-                system_instruction=f"{config.BotConfig.bot_prompt_voice}\n{additional_info}"
-            )
-            messages = [{"role": "user", "parts": [{"text": f"{author.display_name} (голосовое сообщение)"},
-                                                   {"inline_data": {"data": wav_data, "mime_type": "audio/wav"}}]}, ]
-
-            res = await asyncio.to_thread(self.generate_gemini_1_5_flesh, model=model,
-                                          contents=messages,
-                                          tools=gpt_tools.voice_tools)
-
-            func_call = [i.function_call for i in res.candidates[0].content.parts if "function_call" in i]
-            if not func_call:
-                return res.text
-            else:
-                tool_call = func_call[0]
-
-                messages.append(generate_function_call(tool_call.name, tool_call.args))
-
-                function_to_call = getattr(self.voice_tools, tool_call.name, gpt_tools.fake_func)
-
-                func_kwargs = {i: tool_call.args[i] for i in tool_call.args}
-                if tool_call.name in ("play_music", "off_music", "get_que"):
-                    func_kwargs["mixer"] = self.voice_connections[channel.guild.id].mixer_player
-
-                function_response = await function_to_call(**func_kwargs)
-                logging.info(f"tools (ВОЙС): {tool_call.name}, {function_response}")
-
-                messages.append(generate_function_response(tool_call.name, function_response))
-                res = await asyncio.to_thread(self.generate_gemini_1_5_flesh, model=model,
-                                              contents=messages, generation_config=self.generation_config)
-                return res.text
-        except google.api_core.exceptions.GoogleAPIError as e:
-            logging.error(traceback.format_exc())
-            return "Ошибка со стороны гугла"
-        except Exception as e:
-            logging.error(traceback.format_exc())
-            return "Ошибка при генерации ответа"
-
-    async def generate_answer(self, messages, members=None, mes=None, additional_info=""):
-        if members is None:
-            members = {}
+    async def generate_answer(self, messages, additional_info=""):
         try:
             model = genai.GenerativeModel(
                 model_name=config.Gemini.main_model,
@@ -142,9 +145,6 @@ class GPT:
                 function_to_call = getattr(self.text_tools, tool_call.name, gpt_tools.fake_func)
 
                 func_kwargs = {i: tool_call.args[i] for i in tool_call.args}
-                if tool_call.name in ("enjoy_voice", "play_from_text", "stop_from_text", "get_que_from_text"):
-                    func_kwargs["message"] = mes
-
                 function_response = await function_to_call(**func_kwargs)
 
                 if tool_call.name in ("search_gif_on_tenor", "play_from_text", "get_que_from_text"):

@@ -1,7 +1,7 @@
 import logging
 import argparse
 
-from . import discord_bot
+from . import telegram_bot
 from . import config
 
 
@@ -40,7 +40,7 @@ def beautiful_logging():
 
 def start_app():
     beautiful_logging()
-    discord_bot.run_bot()
+    telegram_bot.run_bot()
 
 
 if __name__ == "__main__":

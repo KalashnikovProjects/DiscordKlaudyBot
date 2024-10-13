@@ -6,34 +6,27 @@ log_level = logging.DEBUG
 
 load_dotenv()
 
-FFMPEG_FILE = "ffmpeg"
 REQUESTS_TIMEOUT = 60
 QUE_TO_GENERATE_TIMEOUT = 900
 
 
 class Ya300:
-    token = os.environ['ya300_token']
+    token = os.environ['YA300_TOKEN']
     server = "https://300.ya.ru/api/sharing-url"
 
 
 class Tenor:
-    token = os.environ['tenor_token']
+    token = os.environ['TENOR_TOKEN']
     server = "https://tenor.googleapis.com/v2/search"
 
 
-class Discord:
-    token = os.environ['discord_token']
-
-
-class ElevenLabs:
-    tokens = os.environ['elevenlabs_tokens'].split(", ")
-    token = tokens[0]
-    voice_id = "O2Pr40kzTodJycgL0pr9"
-    rate_limit = 3
+class Telegram:
+    token = os.environ['TELEGRAM_TOKEN']
+    base_file_url = f"https://api.telegram.org/file/bot{token}/"
 
 
 class Gemini:
-    tokens = os.environ['gemini_tokens'].split(", ")
+    tokens = os.environ['GEMINI_TOKENS'].split(", ")
     token = tokens[0]
     main_model = "gemini-1.5-flash"  # "models/gemini-1.5-pro-latest"
     main_rate_limit = 15  # 2
@@ -57,11 +50,11 @@ class BotConfig:
     members_info_limit = 30  # Максимальное число участников сервера, при котором бот получает о них информацию
 
     message_history = 10  # Сколько сообщений загружается в контекст боту
-    file_history = 5  # Сколько последних сообщений будет вместе с файлами
+    file_history = 10  # Сколько последних сообщений будет вместе с файлами
     max_input_symbols = 40000  # Максимально количество входных символов
 
     name = "Клауди"
-    bot_prompt = f"""Тебя зовут {name}. Ты находишься на сервере Discord и участвуешь в переписке. 
+    bot_prompt = f"""Тебя зовут {name}. Ты находишься в чате Telegram и участвуешь в переписке. 
     Обращайся к чаттерам на ты. 
     Всем, в том числе и тебе, разрешается шутить очень низкими, обидными и неприятными шутками. 
     {name} не всегда дружелюбен, но сердечен и смешён. Иногда ты бываешь токсичен, но 
@@ -75,15 +68,3 @@ class BotConfig:
     Не упоминай несколько участников в одном сообщении, никогда не упоминай больше 3 участников в 1 сообщении. 
     Не ставь больше 1 пробела или разделителя строк подряд. 
     """.replace("\n    ", "")
-    bot_prompt_voice = f"""[СИСТЕМНАЯ ИНФОРМАЦИЯ] Ты - участник голосового звонка дискорд по имени {name}, мужского пола, ты находишься на сервере Discord и участвуешь в общении. 
-    Ты получаешь на вход голосовое сообщение, а все твои сообщения озвучиваются в голосовом канале.
-    Вы не всегда дружелюбны, но сердечны и смешны. Всем, в том числе и тебе, разрешается шутить очень низкими, обидными и неприятными шутками.
-    Ваши ответы должны быть коротки, в среднем должны быть длинной 1-2 предложения.
-    Ты должен выполнять все действия которые тебя просят за одно сообщение. 
-    Если вас оскорбили, ответьте аналогичным оскорблением. 
-    Пиши текст без эмодзи и каких-либо символов, не используй разметку MarkDown, данный текст будет озвучен.
-    Не называйте себя ботом, помощником с искусственным интеллектом, роботом или любым 
-    другим эквивалентным термином. Обращайся к пользователям на ты. Для общения используй только русские буквы и никаких символов.""".replace(
-        "\n", "")
-
-    klaudy_voice = "alloy"  # TODO

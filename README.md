@@ -10,8 +10,8 @@
 # Инструкции по использованию (модификации)
 1. Создать **application** -> добавить **bot** на [Discord Development Portal](https://discord.com/developers/applications), включить в настройках бота все галочки 
 _Privileged Gateway Intents_, получить токен
-2. Для редактирования промпта (личности) бота необходимо поменять _name_, _bot_prompt_ и *bot_prompt_voice* в **[klaudy/config.py](klaudy/config.py)**
-3. Установить *ffmpeg.exe* (в [klaudy/config.py](klaudy/config.py) можно указать путь к нему)
+2. Для редактирования промпта (личности) бота необходимо поменять _name_, _bot_prompt_ и *bot_prompt_voice* в **[klaudy/config.py](klaudy_tg/config.py)**
+3. Установить *ffmpeg.exe* (в [klaudy/config.py](klaudy_tg/config.py) можно указать путь к нему)
 4. Установить зависимости из [requirements.txt](requirements.txt)
 5. Заполнить поля **environment variables** (переменных окружения) своими значениями
 6. Запустить `python -m klaudy`
