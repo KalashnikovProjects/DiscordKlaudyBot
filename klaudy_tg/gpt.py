@@ -119,7 +119,7 @@ class GPT:
 
         self.text_tools = gpt_tools.TextTools(gpt_obj=self)
 
-    async def generate_answer(self, messages, additional_info="", retries=2):
+    async def generate_answer(self, messages, additional_info="", retries=1):
         try:
             model = genai.GenerativeModel(
                 model_name=config.Gemini.main_model,

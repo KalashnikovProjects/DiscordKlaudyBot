@@ -5,6 +5,7 @@ import asyncio
 
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message
+from aiogram.filters import command
 from attr import dataclass
 
 from . import config, utils
@@ -47,6 +48,9 @@ class MessagesCache:
     def __init__(self, limit=10):
         self.storage = defaultdict(list)
         self.limit = limit
+
+    def clear_chat(self, chat_id: int):
+        self.storage.pop(chat_id)
 
     def add(self, chat_id: int, message: CacheMessage):
         self.storage[chat_id].append(message)
@@ -151,7 +155,6 @@ class TelegramBot:
         return res
 
     async def process_brain(self, message: Message) -> str:
-        await self.add_to_history(message)
         chat_info = await self.generate_chat_info(message)
 
         history = await self.load_history(message)
@@ -163,15 +166,23 @@ class TelegramBot:
             chat_answer = chat_answer[:4091] + "..."
         return chat_answer
 
+    async def clear(self, message: Message):
+        self.messages_cache.clear_chat(message.chat.id)
+
     async def handle_message(self, message: Message):
+        await self.add_to_history(message)
+
         is_reply = message.reply_to_message and message.reply_to_message.from_user.username == self.me.username
         text = message.text or message.caption or ""
+        if text.startswith("/clear"):
+            await self.clear(message)
+            return
         is_ping = f"@{config.BotConfig.name}" in text or self.me.username in text
         if is_reply or is_ping or message.chat.type == "private":
             async with BotAction(self.bot, message.chat.id, 'typing'):
                 answer = await self.process_brain(message)
                 if answer:
-                    await message.reply(answer)
+                    await self.add_to_history(await message.reply(answer))
 
     async def start(self):
         await self.setup_me()
