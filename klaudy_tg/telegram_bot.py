@@ -3,7 +3,7 @@ from collections import defaultdict
 from typing import List, Dict, Any
 import asyncio
 
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher
 from aiogram.types import Message
 from attr import dataclass
 
@@ -70,7 +70,7 @@ class TelegramBot:
     async def setup_me(self):
         self.me = await self.bot.get_me()
 
-    async def get_message_files(self, message: types.Message):
+    async def get_message_files(self, message: Message):
         files = [FileId(id=i.file_id,
                         mime_type=i.mime_type if hasattr(i, 'mime_type') else None)
                  for i in (
@@ -91,13 +91,14 @@ class TelegramBot:
     def setup_handlers(self):
         self.dp.message.register(self.handle_message)
 
-    async def load_history(self, message: Message) -> List[CacheMessage]:
+    async def add_to_history(self, message: Message):
         files = await self.upload_files(await self.get_message_files(message))
         text = message.text or message.caption or ""
 
         mes = CacheMessage(autor=message.from_user.username, text=text, files=files)
         self.messages_cache.add(message.chat.id, mes)
 
+    async def load_history(self, message: Message) -> List[CacheMessage]:
         return self.messages_cache.get(message.chat.id)
 
     def normalize_history(self, history: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -150,6 +151,7 @@ class TelegramBot:
         return res
 
     async def process_brain(self, message: Message) -> str:
+        await self.add_to_history(message)
         chat_info = await self.generate_chat_info(message)
 
         history = await self.load_history(message)
@@ -161,7 +163,7 @@ class TelegramBot:
             chat_answer = chat_answer[:4091] + "..."
         return chat_answer
 
-    async def handle_message(self, message: types.Message):
+    async def handle_message(self, message: Message):
         is_reply = message.reply_to_message and message.reply_to_message.from_user.username == self.me.username
         text = message.text or message.caption or ""
         is_ping = f"@{config.BotConfig.name}" in text or self.me.username in text
