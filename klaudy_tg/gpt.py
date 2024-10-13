@@ -119,8 +119,7 @@ class GPT:
 
         self.text_tools = gpt_tools.TextTools(gpt_obj=self)
 
-    @retry(tries=3, delay=2)
-    async def generate_answer(self, messages, additional_info=""):
+    async def generate_answer(self, messages, additional_info="", retries=2):
         try:
             model = genai.GenerativeModel(
                 model_name=config.Gemini.main_model,
@@ -163,9 +162,15 @@ class GPT:
                     result_text += f"{i}\n"
                 return result_text
         except google.api_core.exceptions.GoogleAPIError as e:
+            if retries:
+                logging.warning(e)
+                return await self.generate_answer(messages, additional_info, retries - 1)
             logging.error(traceback.format_exc())
             return f"Ошибка со стороны гугла: {e}"
         except Exception as e:
+            if retries:
+                logging.warning(e)
+                return await self.generate_answer(messages, additional_info, retries - 1)
             logging.error(traceback.format_exc())
             return f"Ошибка {e}"
 
