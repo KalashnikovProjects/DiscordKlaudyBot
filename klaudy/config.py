@@ -12,28 +12,28 @@ QUE_TO_GENERATE_TIMEOUT = 900
 
 
 class Ya300:
-    token = os.environ['ya300_token']
+    token = os.environ['YA300_TOKEN']
     server = "https://300.ya.ru/api/sharing-url"
 
 
 class Tenor:
-    token = os.environ['tenor_token']
+    token = os.environ['TENOR_TOKEN']
     server = "https://tenor.googleapis.com/v2/search"
 
 
 class Discord:
-    token = os.environ['discord_token']
+    token = os.environ['DISCORD_TOKEN']
 
 
 class ElevenLabs:
-    tokens = os.environ['elevenlabs_tokens'].split(", ")
+    tokens = os.environ['ELEVENLABS_TOKEN'].split(", ")
     token = tokens[0]
     voice_id = "vQxSi2EuaRWwBw3nn6dK"
     rate_limit = 3
 
 
 class Gemini:
-    tokens = os.environ['gemini_tokens'].split(", ")
+    tokens = os.environ['GEMINI_TOKENS'].split(", ")
     token = tokens[0]
     main_model = "gemini-1.5-flash"  # "models/gemini-1.5-pro-latest"
     main_rate_limit = 15  # 2
