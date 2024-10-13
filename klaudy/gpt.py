@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import os
 import random
 import traceback
 
@@ -168,6 +167,7 @@ class GPT:
             logging.error(traceback.format_exc())
             return "Ошибка при генерации ответа"
 
+    @retry(tries=3, delay=2)
     async def generate_answer(self, messages, members=None, mes=None, additional_info=""):
         if members is None:
             members = {}

@@ -1,5 +1,5 @@
 Flask
-gunicorn
+gunicorn # need for free hosting keep_alive
 requests
 discord.py~=2.4.0
 google-generativeai~=0.7.0
@@ -12,7 +12,6 @@ aiohttp~=3.9.2
 yt-dlp
 youtube-search-python
 google
-pytube~=15.0.0
 elevenlabs
 python-dotenv
 retry
