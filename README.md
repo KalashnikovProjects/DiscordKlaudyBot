@@ -1,5 +1,5 @@
 # Основное описание
-#### Клауди - AI чат бот Discord на основе ~~ChatGPT~~ Gemini API, вдохновлён закрывшимся оффициальным ботом Discord Clyde.
+#### Клауди - AI чат бот Discord на основе ~~ChatGPT~~ Gemini API, вдохновлён закрывшимся официальным ботом Discord Clyde.
 #### Сейчас бота нельзя добавлять на свои сервера, он хостится на бесплатном хосте и умрёт от 10 человек :)
 #### В ветке [telegram](https://github.com/KalashnikovProjects/DiscordKlaudyBot/tree/telegram) есть адаптация бота под telegram.
 ## Он может: 
