@@ -26,7 +26,7 @@ class Discord:
 
 
 class ElevenLabs:
-    tokens = os.environ['ELEVENLABS_TOKEN'].split(", ")
+    tokens = os.environ['ELEVENLABS_TOKENS'].split(", ")
     token = tokens[0]
     voice_id = "vQxSi2EuaRWwBw3nn6dK"
     rate_limit = 3
