@@ -41,7 +41,7 @@ class FileId:
 class CacheMessage:
     autor: str
     text: str
-    files: list[dict[str, str]]
+    files_uri: list[str]
 
 
 class MessagesCache:
@@ -83,13 +83,13 @@ class TelegramBot:
             files.extend([FileId(id=i.file_id, mime_type=None) for i in message.photo])
         return files
 
-    async def upload_files(self, files: list[FileId]) -> list[dict[str, Any]]:
+    async def upload_files(self, files: list[FileId]) -> list[str]:
         file_data = []
 
         for i in files:
             data = (await self.bot.download_file((await self.bot.get_file(i.id)).file_path)).read()
             uri = await upload_file(data, i.mime_type, i.id)
-            file_data.append({"mime_type": i.mime_type, "file_uri": uri})
+            file_data.append(uri)
         return file_data
 
     def setup_handlers(self):
@@ -99,7 +99,7 @@ class TelegramBot:
         files = await self.upload_files(await self.get_message_files(message))
         text = message.text or message.caption or ""
 
-        mes = CacheMessage(autor=message.from_user.username, text=text, files=files)
+        mes = CacheMessage(autor=message.from_user.username, text=text, files_uri=files)
         self.messages_cache.add(message.chat.id, mes)
 
     async def load_history(self, message: Message) -> List[CacheMessage]:
@@ -149,8 +149,8 @@ class TelegramBot:
         else:
             res = {"role": "user", "parts": [{"text": f"@{mes.autor}: {cont}"}]}
         if with_files:
-            if mes.files:
-                res["parts"].extend([{"file_data": image} for image in mes.files])
+            if mes.files_uri:
+                res["parts"].extend([{"file_data": {"file_uri": image}} for image in mes.files_uri])
 
         return res
 

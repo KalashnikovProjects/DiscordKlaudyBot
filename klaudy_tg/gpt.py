@@ -3,6 +3,7 @@ import json
 import logging
 import random
 import traceback
+from mimetypes import guess_extension
 
 import aiohttp
 from retry import retry
@@ -41,11 +42,10 @@ async def upload_file(data, content_type, filename):
         "X-Goog-Upload-Protocol": "resumable",
         "X-Goog-Upload-Command": "start",
         "X-Goog-Upload-Header-Content-Length": str(num_bytes),
+        "X-Goog-Upload-Header-Content-Type": content_type or "text/plain",
         "Content-Type": "application/json"
     }
-    if content_type:
-        headers['X-Goog-Upload-Header-Content-Type'] = content_type
-    json_data = json.dumps({"file": {"display_name": f"{r}-{filename}"}})
+    json_data = json.dumps({"file": {"display_name": f"{r}-{filename}.{guess_extension(content_type)}"}})
 
     async with aiohttp.ClientSession() as session:
         async with session.post(
@@ -101,8 +101,7 @@ def generate_function_response(name, function_response):
 def stop_log(res):
     finish_reasons = {1: "баг в Клауди", 2: "лимит длинны запроса/ответа", 3: "цензура блочит",
                       4: "повторяющиеся токены в запросе", 5: "баг на стороне гуглов"}
-    logging.info(
-        f"Ошибка при генерации ответа {finish_reasons[res.candidates[0].finish_reason]}, {res.candidates[0].safety_ratings}")
+    logging.warning(f"Ошибка при генерации ответа {finish_reasons[res.candidates[0].finish_reason]}, {res.candidates[0].safety_ratings}")
     logging.debug(res)
     return f"Ошибка при генерации ответа `{finish_reasons[res.candidates[0].finish_reason]}`"
 
@@ -132,6 +131,8 @@ class GPT:
                                           tools=gpt_tools.text_tools,
                                           generation_config=self.generation_config)
             if not res.parts:
+                if retries:
+                    return await self.generate_answer(messages, additional_info, retries - 1)
                 return stop_log(res)
             func_call = [i.function_call for i in res.candidates[0].content.parts if "function_call" in i]
             if not func_call:
