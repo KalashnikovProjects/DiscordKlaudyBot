@@ -3,6 +3,7 @@ import json
 import logging
 import random
 import traceback
+from mimetypes import guess_extension
 
 import aiohttp
 from retry import retry
