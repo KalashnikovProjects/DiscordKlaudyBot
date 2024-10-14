@@ -68,10 +68,10 @@ async def upload_file(data, content_type, filename):
         "X-Goog-Upload-Protocol": "resumable",
         "X-Goog-Upload-Command": "start",
         "X-Goog-Upload-Header-Content-Length": str(num_bytes),
-        "X-Goog-Upload-Header-Content-Type": content_type,
+        "X-Goog-Upload-Header-Content-Type": content_type or "text/plain",
         "Content-Type": "application/json"
     }
-    json_data = json.dumps({"file": {"display_name": f"{r}-{filename}"}})
+    json_data = json.dumps({"file": {"display_name": f"{r}-{filename}.{guess_extension(content_type)}"}})
 
     async with aiohttp.ClientSession() as session:
         async with session.post(
@@ -92,12 +92,15 @@ async def upload_file(data, content_type, filename):
         file_uri = file_info["file"]["uri"]
         state = file_info["file"]["state"]
 
-        print("uploading file", end="")
+        logging.info("uploading file")
+        if state == "ACTIVE":
+            return file_uri
         while state == "PROCESSING":
-            print(".", end="")
             await asyncio.sleep(0.5)
             file = genai.get_file(file_info["file"]["name"])
             state = file.state.name
+        if not file:
+            raise ValueError(state)
         if file.state.name == "FAILED":
             raise ValueError(file.state.name)
 
