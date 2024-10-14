@@ -94,7 +94,7 @@ class BotEventHandler(discord.Client):
         messages = await self.convert_history_to_messages(history, config.BotConfig.max_input_symbols, config.BotConfig.file_history)
         members = get_members(message)
 
-        chat_answer = await self.gpt.generate_answer(messages, members=members, mes=message, additional_info=chat_info)
+        chat_answer = await self.gpt.generate_answer(messages, mes=message, additional_info=chat_info)
         res = self.convert_ai_answer_to_message_text(chat_answer, members)
         return res
 

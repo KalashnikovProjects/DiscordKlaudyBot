@@ -171,9 +171,7 @@ class GPT:
             return "Ошибка при генерации ответа"
 
     @retry(tries=3, delay=2)
-    async def generate_answer(self, messages, members=None, mes=None, additional_info=""):
-        if members is None:
-            members = {}
+    async def generate_answer(self, messages, mes=None, additional_info="", retries=1):
         try:
             model = genai.GenerativeModel(
                 model_name=config.Gemini.main_model,
@@ -220,9 +218,15 @@ class GPT:
                     result_text += f"{i}\n"
                 return result_text
         except google.api_core.exceptions.GoogleAPIError as e:
+            if retries:
+                logging.warning(e)
+                return await self.generate_answer(messages, mes=mes, additional_info=additional_info, retries=retries - 1)
             logging.error(traceback.format_exc())
             return f"Ошибка со стороны гугла: {e}"
         except Exception as e:
+            if retries:
+                logging.warning(e)
+                return await self.generate_answer(messages, mes=mes, additional_info=additional_info, retries=retries - 1)
             logging.error(traceback.format_exc())
             return f"Ошибка {e}"
 
