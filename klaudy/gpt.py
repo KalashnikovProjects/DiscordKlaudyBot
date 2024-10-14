@@ -123,7 +123,7 @@ class GPT:
         self.voice_tools = gpt_tools.VoiceTools()
         self.text_tools = gpt_tools.TextTools(gpt_obj=self)
 
-    async def generate_answer_for_voice(self, wav_data, author, channel: discord.VoiceChannel):
+    async def generate_answer_for_voice(self, wav_data, author, channel: discord.VoiceChannel, retries=1):
         try:
             additional_info = f"Информация о голосовом чате\nНазвание сервера: {channel.guild.name}\nНазвание голосового канала: {channel.name}\nСписок ников пользователей голосового чата: "
             if len(channel.members) < config.BotConfig.members_info_limit:
@@ -144,6 +144,9 @@ class GPT:
 
             func_call = [i.function_call for i in res.candidates[0].content.parts if "function_call" in i]
             if not func_call:
+                if retries:
+                    return await self.generate_answer_for_voice(wav_data, author=author, channel=channel,
+                                                                retries=retries - 1)
                 return res.text
             else:
                 tool_call = func_call[0]
@@ -164,13 +167,19 @@ class GPT:
                                               contents=messages, generation_config=self.generation_config)
                 return res.text
         except google.api_core.exceptions.GoogleAPIError as e:
+            if retries:
+                logging.warning(e)
+                return await self.generate_answer_for_voice(wav_data, author=author, channel=channel, retries=retries - 1)
             logging.error(traceback.format_exc())
             return "Ошибка со стороны гугла"
         except Exception as e:
+            if retries:
+                logging.warning(e)
+                return await self.generate_answer_for_voice(wav_data, author=author, channel=channel, retries=retries - 1)
             logging.error(traceback.format_exc())
             return "Ошибка при генерации ответа"
 
-    @retry(tries=3, delay=2)
+
     async def generate_answer(self, messages, mes=None, additional_info="", retries=1):
         try:
             model = genai.GenerativeModel(
@@ -187,6 +196,9 @@ class GPT:
                 return stop_log(res)
             func_call = [i.function_call for i in res.candidates[0].content.parts if "function_call" in i]
             if not func_call:
+                if retries:
+                    return await self.generate_answer(messages, mes=mes, additional_info=additional_info,
+                                                      retries=retries - 1)
                 return res.text
             else:
                 tools_logs = []
