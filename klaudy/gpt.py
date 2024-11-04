@@ -3,20 +3,17 @@ import json
 import logging
 import random
 import traceback
-from mimetypes import guess_extension
-
 import aiohttp
-from retry import retry
 import discord
-
 import google.api_core.exceptions
 import google.generativeai as genai
 from google.generativeai.types import HarmBlockThreshold
+from mimetypes import guess_extension
+from retry import retry
 
 from . import config
 from . import gpt_tools
 from . import utils
-
 
 genai.configure(api_key=config.Gemini.token,
                 client_options={"api_endpoint": config.Gemini.server},
@@ -76,9 +73,9 @@ async def upload_file(data, content_type, filename):
 
     async with aiohttp.ClientSession() as session:
         async with session.post(
-            f"https://{config.Gemini.server}/upload/v1beta/files?key={config.Gemini.token}&alt=json&uploadType=resumable",
-            headers=headers,
-            data=json_data
+                f"https://{config.Gemini.server}/upload/v1beta/files?key={config.Gemini.token}&alt=json&uploadType=resumable",
+                headers=headers,
+                data=json_data
         ) as response:
             upload_url = response.headers.get("Location")
 
@@ -119,7 +116,7 @@ class GPT:
             candidate_count=1)
 
         self.no_safety = {i: HarmBlockThreshold.BLOCK_NONE for i in range(7, 11)}
-        # Отключаем цензуру, у нас бот токсик
+        # No censor, our bot toxic
 
         self.voice_tools = gpt_tools.VoiceTools()
         self.text_tools = gpt_tools.TextTools(gpt_obj=self)
@@ -170,16 +167,17 @@ class GPT:
         except google.api_core.exceptions.GoogleAPIError as e:
             if retries:
                 logging.warning(e)
-                return await self.generate_answer_for_voice(wav_data, author=author, channel=channel, retries=retries - 1)
+                return await self.generate_answer_for_voice(wav_data, author=author, channel=channel,
+                                                            retries=retries - 1)
             logging.error(traceback.format_exc())
             return "Ошибка со стороны гугла"
         except Exception as e:
             if retries:
                 logging.warning(e)
-                return await self.generate_answer_for_voice(wav_data, author=author, channel=channel, retries=retries - 1)
+                return await self.generate_answer_for_voice(wav_data, author=author, channel=channel,
+                                                            retries=retries - 1)
             logging.error(traceback.format_exc())
             return "Ошибка при генерации ответа"
-
 
     async def generate_answer(self, messages, mes=None, additional_info="", retries=1):
         try:
@@ -233,17 +231,19 @@ class GPT:
         except google.api_core.exceptions.GoogleAPIError as e:
             if retries:
                 logging.warning(e)
-                return await self.generate_answer(messages, mes=mes, additional_info=additional_info, retries=retries - 1)
+                return await self.generate_answer(messages, mes=mes, additional_info=additional_info,
+                                                  retries=retries - 1)
             logging.error(traceback.format_exc())
             return f"Ошибка со стороны гугла: {e}"
         except Exception as e:
             if retries:
                 logging.warning(e)
-                return await self.generate_answer(messages, mes=mes, additional_info=additional_info, retries=retries - 1)
+                return await self.generate_answer(messages, mes=mes, additional_info=additional_info,
+                                                  retries=retries - 1)
             logging.error(traceback.format_exc())
             return f"Ошибка {e}"
 
-    # Токен выбирается декоратором
+    # Decorator select token
     @retry(tries=3, delay=2)
     @utils.api_rate_limiter_with_ques(rate_limit=config.Gemini.main_rate_limit, tokens=config.Gemini.tokens)
     def generate_gemini_1_5_flesh(self, *args, model, token=config.Gemini.token, **kwargs):

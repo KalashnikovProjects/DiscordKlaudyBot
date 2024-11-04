@@ -13,9 +13,9 @@ async def get_answer_history(message: discord.Message, count):
     res = [message]
     messages_cache = {i.id: i async for i in message.channel.history(limit=count * 4)}
     while len(res) <= count and res[-1].reference and res[-1].reference.message_id:
-        m = messages_cache.get(res[-1].reference.message_id)
-        if m:
-            res.append(m)
+        mes = messages_cache.get(res[-1].reference.message_id)
+        if mes:
+            res.append(mes)
         else:
             break
     return res
@@ -26,9 +26,9 @@ def normalize_history(history):
     last = "model"
     for i in history:
         if i["role"] == last:
-            res.append({"role": "model", "parts": [{"text": ""}]})
-        last = i["role"]
+            res.append({"role": "model" if i["role"] == "user" else "user", "parts": [{"text": ""}]})
         res.append(i)
+        last = i["role"]
     return res
 
 
@@ -39,7 +39,6 @@ async def get_files(message: discord.Message):
 
     for attachment in message.attachments:
         data = await attachment.read()
-
         if need_upload:
             uri = await upload_file(data, attachment.content_type, attachment.filename)
             file_data.append({"mime_type": attachment.content_type, "file_uri": uri})
@@ -49,9 +48,8 @@ async def get_files(message: discord.Message):
 
 
 def generate_chat_info(message: discord.Message):
-    chat_info = f"""Информация о чате \nНазвание сервера: {message.guild.name} \nНазвание канала: {message.channel} \nСписок пользователей чата: """
+    chat_info = f"""Информация о чате \nНазвание сервера: {message.guild.name} \nНазвание канала: {message.channel} \nСписок пользователей чата:"""
     if len(message.guild.members) < config.BotConfig.members_info_limit:
-        chat_info += f""
         for member in message.guild.members:
             chat_info += f" {member.display_name}: {member.name};"
     return chat_info
@@ -73,19 +71,25 @@ class BotEventHandler(discord.Client):
     async def on_ready(self):
         logging.info(f'Бот подключен к {len(self.guilds)} серверам. {self.user.name} стартует')
 
-    async def on_message(self, message: discord.message.Message):
+    async def bot_pinged(self, message: discord.Message):
         if message.author == self.user:
-            return
-        if not ("@&1175193886591819881" in message.content or
-                self.user.mentioned_in(message) or
-                message.content.startswith(f"!{config.BotConfig.name}")):
+            return False
+        if self.user.mentioned_in(message) or message.content.startswith(f"!{config.BotConfig.name}"):
+            return True
+        roles = message.guild.get_member(self.user.id).roles
+        for role in roles:
+            if f"<@&{role.id}>" in message.content:
+                return True
+
+    async def on_message(self, message: discord.message.Message):
+        if not await self.bot_pinged(message):
             return
 
         async with message.channel.typing():
             answer = await self.process_brain(message)
             if answer == "":
                 return
-        await message.channel.send(answer, reference=message, allowed_mentions=discord.AllowedMentions(users=True, replied_user=True))
+            await message.channel.send(answer, reference=message, allowed_mentions=discord.AllowedMentions(users=True, replied_user=True))
 
     async def process_brain(self, message: discord.Message):
         chat_info = generate_chat_info(message)

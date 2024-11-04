@@ -53,7 +53,6 @@ voice_tools = {'function_declarations': [
             "required": [],
         },
     },
-    # временно отключено, бот слишком часто использовал
     # {
     #     "name": "leave_voice",
     #     "description": "Используй что бы выйти из голосового канала",
@@ -104,7 +103,6 @@ class VoiceTools:
                 return "`Очередь музыки пуста`"
             return "\n".join(lines)
         except Exception as e:
-            # logging.error(f"play_music - {traceback.format_exc()}")
             logging.warning(f"get_que - {e}")
             return f"`Ошибка при получении очереди`"
 
