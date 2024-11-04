@@ -51,7 +51,6 @@ async def get_files(message: discord.Message):
 def generate_chat_info(message: discord.Message):
     chat_info = f"""Информация о чате \nНазвание сервера: {message.guild.name} \nНазвание канала: {message.channel} \nСписок пользователей чата: """
     if len(message.guild.members) < config.BotConfig.members_info_limit:
-        chat_info += f""
         for member in message.guild.members:
             chat_info += f" {member.display_name}: {member.name};"
     return chat_info
