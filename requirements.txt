@@ -9,6 +9,7 @@ ffmpeg
 pydub~=0.25.1
 discord-ext-voice-recv
 aiohttp~=3.9.2
+yt-dlp
 youtube-search-python
 google
 elevenlabs
