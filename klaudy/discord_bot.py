@@ -26,7 +26,7 @@ def normalize_history(history):
     last = "model"
     for i in history:
         if i["role"] == last:
-            res.append({"role": "model" if i["role"] == "user" else "user", "parts": [{"text": ""}]})
+            res.append({"role": "model" if i["role"] == "user" else "user", "parts": [{"text": "."}]})
         res.append(i)
         last = i["role"]
     return res
