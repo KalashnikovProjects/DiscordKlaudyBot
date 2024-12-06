@@ -110,7 +110,7 @@ class TelegramBot:
         last = "model"
         for i in history:
             if i["role"] == last:
-                res.append({"role": "model", "parts": [{"text": ""}]})
+                res.append({"role": "model" if i["role"] == "user" else "user", "parts": [{"text": "."}]})
             last = i["role"]
             res.append(i)
         return res
