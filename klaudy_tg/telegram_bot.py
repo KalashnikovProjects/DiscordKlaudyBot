@@ -206,15 +206,13 @@ class TelegramBot:
         if text.startswith("/clear"):
             await self.clear(message)
             return
+        no_prompt_mod = text.startswith("/gpt")
         is_ping = f"@{config.BotConfig.name}" in text or self.me.username in text
-        if is_reply or is_ping or message.chat.type == "private":
+        if no_prompt_mod or is_reply or is_ping or message.chat.type == "private":
             async with BotAction(self.bot, message.chat.id, 'typing'):
                 await self.add_to_history(message)
 
-                if text.startswith("/gpt"):
-                    answer = await self.process_brain(message, no_prompt=True)
-                else:
-                    answer = await self.process_brain(message, no_prompt=False)
+                answer = await self.process_brain(message, no_prompt=no_prompt_mod)
                 if answer:
                     converted = telegramify_markdown.markdownify(
                         answer,
