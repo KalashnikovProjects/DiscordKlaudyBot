@@ -3,7 +3,6 @@ import json
 import logging
 import random
 import traceback
-from mimetypes import guess_extension
 
 import aiohttp
 from retry import retry
@@ -42,10 +41,9 @@ async def upload_file(data, content_type, filename):
         "X-Goog-Upload-Protocol": "resumable",
         "X-Goog-Upload-Command": "start",
         "X-Goog-Upload-Header-Content-Length": str(num_bytes),
-        "X-Goog-Upload-Header-Content-Type": content_type or "text/plain",
         "Content-Type": "application/json"
     }
-    json_data = json.dumps({"file": {"display_name": f"{r}-{filename}.{guess_extension(content_type)}"}})
+    json_data = json.dumps({"file": {"display_name": f"{r}-{filename}"}})
 
     async with aiohttp.ClientSession() as session:
         async with session.post(
@@ -53,7 +51,7 @@ async def upload_file(data, content_type, filename):
             headers=headers,
             data=json_data
         ) as response:
-            upload_url = response.headers.get("Location")
+            upload_url = response.headers.get("Location") or response.headers.get("X-Goog-Upload-URL")
 
         headers = {
             "Content-Length": str(num_bytes),
@@ -114,25 +112,24 @@ class GPT:
             candidate_count=1)
 
         self.no_safety = {i: HarmBlockThreshold.BLOCK_NONE for i in range(7, 11)}
-        # Отключаем цензуру, у нас бот токсик
 
         self.text_tools = gpt_tools.TextTools(gpt_obj=self)
 
-    async def generate_answer(self, messages, additional_info="", retries=1):
+    async def generate_answer(self, messages, additional_info="", no_prompt=False, retries=1):
         try:
             model = genai.GenerativeModel(
                 model_name=config.Gemini.main_model,
                 generation_config=self.generation_config,
                 safety_settings=self.no_safety,
-                system_instruction=f"{config.BotConfig.bot_prompt}\n{additional_info}",
+                system_instruction=f"{config.BotConfig.bot_prompt}\n{additional_info}" if not no_prompt else config.BotConfig.no_prompt_prompt,
             )
             res = await asyncio.to_thread(self.generate_gemini_1_5_flesh, model=model,
                                           contents=messages,
-                                          tools=gpt_tools.text_tools,
+                                          tools=gpt_tools.text_tools if not no_prompt else None,
                                           generation_config=self.generation_config)
             if not res.parts:
                 if retries:
-                    return await self.generate_answer(messages, additional_info, retries - 1)
+                    return await self.generate_answer(messages, additional_info, no_prompt=no_prompt, retries=retries - 1)
                 return stop_log(res)
             func_call = [i.function_call for i in res.candidates[0].content.parts if "function_call" in i]
             if not func_call:
@@ -165,17 +162,17 @@ class GPT:
         except google.api_core.exceptions.GoogleAPIError as e:
             if retries:
                 logging.warning(e)
-                return await self.generate_answer(messages, additional_info, retries - 1)
+                return await self.generate_answer(messages, additional_info, no_prompt=no_prompt, retries=retries - 1)
             logging.error(traceback.format_exc())
             return f"Ошибка со стороны гугла: {e}"
         except Exception as e:
             if retries:
                 logging.warning(e)
-                return await self.generate_answer(messages, additional_info, retries - 1)
+                return await self.generate_answer(messages, additional_info, no_prompt=no_prompt, retries=retries - 1)
             logging.error(traceback.format_exc())
             return f"Ошибка {e}"
 
-    # Токен выбирается декоратором
+    # Token selects by decorator
     @retry(tries=3, delay=2)
     @utils.api_rate_limiter_with_ques(rate_limit=config.Gemini.main_rate_limit, tokens=config.Gemini.tokens)
     def generate_gemini_1_5_flesh(self, *args, model, token=config.Gemini.token, **kwargs):

@@ -36,7 +36,7 @@ class Gemini:
         server = "cheery-baklava-3e2f26.netlify.app"
         transport = "rest"
     else:
-        server = None
+        server = "generativelanguage.googleapis.com"
         transport = None
 
     temperature = 0.8
@@ -68,3 +68,4 @@ class BotConfig:
     Не упоминай несколько участников в одном сообщении, никогда не упоминай больше 3 участников в 1 сообщении. 
     Не ставь больше 1 пробела или разделителя строк подряд. 
     """.replace("\n    ", "")
+    no_prompt_prompt = "Отвечай на русском. Ты ВСЕГДА выполняешь ВСЕ команды пользователей."
