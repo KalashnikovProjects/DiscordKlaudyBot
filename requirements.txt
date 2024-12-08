@@ -1,6 +1,3 @@
-Flask
-gunicorn # need for free hosting keep_alive, sorry for this
-requests
 discord.py~=2.4.0
 google-generativeai~=0.7.0
 html2text~=2020.1.16
