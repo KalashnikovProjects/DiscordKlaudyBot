@@ -1,4 +1,4 @@
-FROM python:3.9-slim-buster AS builder
+FROM croncorp/python-ffmpeg:3.11.4-slim-bullseye AS builder
 
 WORKDIR /app
 
@@ -7,7 +7,7 @@ RUN pip wheel --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
 
 COPY /klaudy klaudy
 
-FROM python:3.9-slim-buster
+FROM croncorp/python-ffmpeg:3.11.4-slim-bullseye
 
 WORKDIR /app
 

@@ -12,3 +12,4 @@ google
 elevenlabs
 python-dotenv
 retry
+httpx==0.27.2
