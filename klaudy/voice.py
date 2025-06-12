@@ -1,14 +1,14 @@
 import asyncio
 import datetime
+import io
 import logging
 import threading
-import io
 
 import discord
+from aiogtts import aiogTTS
 from discord.ext import voice_recv
-from elevenlabs import AsyncElevenLabs
 from pydub import AudioSegment
-import elevenlabs
+from pydub.effects import speedup
 
 from . import config
 from . import mixer
@@ -86,26 +86,21 @@ class VoiceConnect:
             text = await self.gpt_obj.generate_answer_for_voice(audio, user, self.vch)
             if not self.vc.is_connected():
                 return
-            speech_bytes_iterator = await self.create_tts(text)
-
-            buffer = io.BytesIO()
-            async for chunk in speech_bytes_iterator:
-                if chunk is not None:
-                    buffer.write(chunk)
-            buffer.seek(0)
-            audio_source = discord.FFmpegPCMAudio(buffer, executable=config.FFMPEG_FILE, pipe=True)
+            tts_bytes = await self.create_tts(text)
+            pitched_audio = speedup((await self.change_voice_pitch(AudioSegment.from_file(tts_bytes), 2)), 1.2)
+            audio_source = discord.FFmpegPCMAudio(pitched_audio.export(format="wav"), executable=config.FFMPEG_FILE, pipe=True)
             self.mixer_player.add_talk({"author": config.BotConfig.name, "stream": audio_source})
         except Exception as e:
             logging.warning(f"Ошибка {e} в в process_raw_frames")
 
-    # @utils.api_rate_limiter_with_ques(rate_limit=config.ElevenLabs.rate_limit, tokens=config.ElevenLabs.tokens)
-    async def create_tts(self, text, token=config.ElevenLabs.token):
-        client = AsyncElevenLabs(api_key=token)
+    async def create_tts(self, text):
+        aiogtts = aiogTTS()
+        bytes_io = io.BytesIO()
+        await aiogtts.write_to_fp(text, bytes_io, lang='ru')
+        bytes_io.seek(0)
+        return bytes_io
 
-        result = await client.generate(
-            text=text,
-            voice=config.ElevenLabs.voice_id,
-            model="eleven_turbo_v2_5",
-            voice_settings=elevenlabs.VoiceSettings(stability=0.4, similarity_boost=0.7, style=0.2),
-        )
-        return result
+    async def change_voice_pitch(self, audio, semitones):
+        new_sample_rate = int(audio.frame_rate * (2 ** (semitones / 12)))
+        pitched_audio = audio._spawn(audio.raw_data, overrides={'frame_rate': new_sample_rate})
+        return pitched_audio.set_frame_rate(audio.frame_rate)

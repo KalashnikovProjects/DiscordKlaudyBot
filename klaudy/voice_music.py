@@ -1,4 +1,6 @@
 from youtubesearchpython.__future__ import VideosSearch
+
+import logging
 import discord
 from yt_dlp import YoutubeDL
 
@@ -25,12 +27,14 @@ class NotPlayingError(Exception):
 
 async def from_url(url):
     data = ytdl.extract_info(url, download=False)
+    # logging.debug(f"from_url {data['url']} - {data}")
     return data["url"]
 
 
 async def play_music(query, mixer):
     response = await VideosSearch(query, limit=1, timeout=config.REQUESTS_TIMEOUT).next()
     if not response["result"]:
+        logging.warning(f"play_music no result - {response}")
         return None
     video = response["result"][0]
     source = await from_url(video['link'])
@@ -38,6 +42,7 @@ async def play_music(query, mixer):
              "duration": video["duration"],
              "stream": discord.FFmpegPCMAudio(source, executable=config.FFMPEG_FILE,
                                               before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5")}
+    logging.info(f"play_music {video['title']} - {video}")
     mixer.add_music(music)
     return video["title"]
 

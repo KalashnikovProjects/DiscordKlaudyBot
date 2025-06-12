@@ -25,13 +25,6 @@ class Discord:
     token = os.environ['DISCORD_TOKEN']
 
 
-class ElevenLabs:
-    tokens = os.environ['ELEVENLABS_TOKENS'].split(", ")
-    token = tokens[0]
-    voice_id = "vQxSi2EuaRWwBw3nn6dK"
-    rate_limit = 3
-
-
 class Gemini:
     tokens = os.environ['GEMINI_TOKENS'].split(", ")
     token = tokens[0]
