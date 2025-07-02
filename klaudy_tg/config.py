@@ -28,8 +28,8 @@ class Telegram:
 class Gemini:
     tokens = os.environ['GEMINI_TOKENS'].split(", ")
     token = tokens[0]
-    main_model = "gemini-1.5-flash"  # "models/gemini-1.5-pro-latest"
-    main_rate_limit = 15  # 2
+    main_model = "gemini-2.5-flash"
+    main_rate_limit = 10
 
     proxy = True
     if proxy:
@@ -40,15 +40,10 @@ class Gemini:
         transport = None
 
     temperature = 0.8
-    max_output_tokens = 500
+    max_output_tokens = None
 
 
 class BotConfig:
-    can_chat_with_bots = True  # Если True бот будет отвечать на сообщения других ботов
-    # Может вызвать зацикленность, чтобы остановить можно удалить сообщение, на которое он хочет ответить
-
-    members_info_limit = 30  # Максимальное число участников сервера, при котором бот получает о них информацию
-
     message_history = 10  # Сколько сообщений загружается в контекст боту
     file_history = 10  # Сколько последних сообщений будет вместе с файлами
     max_input_symbols = 40000  # Максимально количество входных символов
