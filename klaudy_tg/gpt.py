@@ -97,11 +97,15 @@ def generate_function_response(name, function_response):
 
 
 def stop_log(res):
-    finish_reasons = {1: "баг в Клауди", 2: "лимит длинны запроса/ответа", 3: "цензура блочит",
-                      4: "повторяющиеся токены в запросе", 5: "баг на стороне гуглов"}
-    logging.warning(f"Ошибка при генерации ответа {finish_reasons[res.candidates[0].finish_reason]}, {res.candidates[0].safety_ratings}")
+    finish_reasons = {1: "баг в Клауди", 2: "лимит длинны запроса/ответа", 3: "тут был жесткий ответ, но гугл его не пропустил",
+                      4: "повторяющиеся токены в запросе", 5: "баг на стороне гуглов", 6: "неподдерживаемый язык",
+                      7: "в ответе были слова из чёрного списка гугла", 8: "в ответе Клауди цензура нашла запрещённый контент",
+                      9: "Клауди хотел слить чьи-то личные данные, но цензура не пропустила",
+                      10: "Клауди хотел вызвать функцию, но его запрос инвалид"}
+    finish_reason = finish_reasons.get(res.candidates[0].finish_reason, f"неизвестная ошибка. finish_reason: {res.candidates[0].finish_reason}")
+    logging.info(f"Ошибка при генерации ответа {finish_reason}, оценки безопасности {res.candidates[0].safety_ratings}")
     logging.debug(res)
-    return f"Ошибка при генерации ответа `{finish_reasons[res.candidates[0].finish_reason]}`"
+    return f"Ошибка при генерации ответа `{finish_reason}`"
 
 
 class GPT:
@@ -172,8 +176,8 @@ class GPT:
             logging.error(traceback.format_exc())
             return f"Ошибка {e}"
 
-    # Token selects by decorator
-    @retry(tries=3, delay=2)
+    # Decorator select token
+    @retry(tries=1, delay=2)
     @utils.api_rate_limiter_with_ques(rate_limit=config.Gemini.main_rate_limit, tokens=config.Gemini.tokens)
     def generate_gemini_1_5_flesh(self, *args, model, token=config.Gemini.token, **kwargs):
         genai.configure(api_key=token,
