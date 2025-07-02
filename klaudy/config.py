@@ -28,8 +28,8 @@ class Discord:
 class Gemini:
     tokens = os.environ['GEMINI_TOKENS'].split(", ")
     token = tokens[0]
-    main_model = "gemini-2.0-flash"  # "models/gemini-1.5-pro-latest"
-    main_rate_limit = 15  # 2
+    main_model = "gemini-2.5-flash"
+    main_rate_limit = 10
 
     proxy = True
     if proxy:
