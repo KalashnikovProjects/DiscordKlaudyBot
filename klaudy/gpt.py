@@ -216,7 +216,7 @@ class GPT:
 
                 function_response = await function_to_call(**func_kwargs)
 
-                if tool_call.name in ("search_gif_on_tenor", "play_from_text", "get_que_from_text"):
+                if tool_call.name in ("play_from_text", "get_que_from_text"):
                     tools_logs.append(function_response)
                 logging.info(f"tools: {tool_call.name}, {func_kwargs} {function_response}")
 
