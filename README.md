@@ -1,6 +1,5 @@
 # Основное описание
-#### Клауди - AI чат бот Discord на основе ~~ChatGPT~~ Gemini API, вдохновлён закрывшимся официальным ботом Discord Clyde.
-#### Сейчас бота нельзя добавлять на свои сервера, он хостится на бесплатном хосте и умрёт от 10 человек :)
+#### Клауди - AI чат бот Discord на основе ~~ChatGPT~~ -> ~~Gemini API~~ -> Mistral AI API, вдохновлён закрывшимся официальным ботом Discord Clyde.
 #### В ветке [telegram](https://github.com/KalashnikovProjects/DiscordKlaudyBot/tree/telegram) есть адаптация бота под telegram.
 ## Он может: 
 * Искать гифки с помощью tenor
@@ -18,7 +17,7 @@ _Privileged Gateway Intents_, получить токен
 6. Запустить `python -m klaudy`
 ## Переменные окружения:
 * **DISCORD_TOKEN** - токен для дискорд бота
-* **GEMINI_TOKENS** - список токенов для Gemini API через запятую [тут получать](https://aistudio.google.com/app/apikey)
+* **GEMINI_TOKEN** - токен Gemini API для разговора в войсе [тут получать](https://aistudio.google.com/app/apikey)
+* **MISTRAL_API_KEY** - токен Mistral AI API для основной нейросети. [получать тут](https://console.mistral.ai/home?workspace_dialog=apiKeys)
 * **TENOR_TOKEN** - токен для поиска гифок на tenor.com [гайд по получению](https://developers.google.com/tenor/guides/quickstart?hl=ru)
 * **YA300_TOKEN** - токен для https://300.ya.ru (можно получить по кнопке API снизу слева)
-* **ELEVENLABS_TOKENS** - токены для озвучки бота в голосовом канале с помощью https://elevenlabs.io

@@ -1,0 +1,13 @@
+services:
+  klaudy-python:
+    image: kalashnik/klaudy:latest
+    build:
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 400M
+    restart: unless-stopped

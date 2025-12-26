@@ -12,7 +12,7 @@ class QueTimoutError(Exception):
 
 def run_in_thread(coroutine):
     """
-    Run async function in thread
+    Запускает асинхронную функцию в отдельном треде
     """
     threading.Thread(target=asyncio.run_coroutine_threadsafe, args=(coroutine, asyncio.get_event_loop())).start()
 
@@ -34,17 +34,17 @@ def background_rate_limit_que_process(rate_ques, last_request_time, rate_limit_t
 
 def api_rate_limiter_with_ques(rate_limit, tokens, timeout=config.QUE_TO_GENERATE_TIMEOUT, rate_limit_time=60):
     """
-    The decorator sets a queue limit for the rate function, with support for multiple tokens (multiple queues)
-, The decorated function must necessarily accept the token argument, it is passed to it from the decorator
+    Декоратор, устанавливает для функции рейт лимит с очередью, с поддержкой нескольких токенов (несколько очередей)
+    Декорируемая функция обязательно должна принимать аргумент token, он в неё передается из декоратора
 
-    Decorator Arguments:
-    tokens - a list of tokens (for cases when there are several accounts with separate limits, otherwise 1 element),
-    timeout - timeout for finding an item in the queue
-    rate_limit - limit of function calls,
-    rate_limit_time=60 - the limit for what time
+    Аргументы декоратора:
+    tokens - список токенов (для случаев когда есть несколько аккаунтов с отдельными лимитами, иначе 1 элемент),
+    timeout - таймаут нахождения элемента в очереди
+    rate_limit - лимит вызовов функции,
+    rate_limit_time=60 - лимит за какое время
 
-    Tasks for which there was not enough limit are postponed to the queue, queue items -
-    threading.Event(), events are served in a separate thread, the wrapper function waits for the event and starts.
+    Задачи на которые не хватило лимита откладываются в очередь, элементы очереди -
+    threading.Event(), евенты подаются в отдельном треде, wrapper функция ждёт евента и запускается.
     """
     rate_ques = [queue.Queue() for _ in tokens]
     last_request_time = [[time.time() - rate_limit_time for _ in range(rate_limit)] for _ in tokens]
@@ -61,7 +61,7 @@ def api_rate_limiter_with_ques(rate_limit, tokens, timeout=config.QUE_TO_GENERAT
                 rate_ques[que_index].put(event)
                 is_set = event.wait(timeout=timeout)
                 if not is_set:
-                    raise QueTimoutError("Que rate limiter timeout")
+                    raise QueTimoutError("Таймаут очереди запросов")
             last_request_time[que_index][last_req_time_index] = time.time()
             token = tokens[que_index]
             res = func(*args, token=token, **kwargs)

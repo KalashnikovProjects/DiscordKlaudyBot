@@ -1,4 +1,4 @@
-FROM croncorp/python-ffmpeg:3.11.4-slim-bullseye AS builder
+FROM amitkma/python-ffmpeg:3.13-slim AS builder
 
 WORKDIR /app
 
@@ -7,7 +7,7 @@ RUN pip wheel --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
 
 COPY /klaudy klaudy
 
-FROM croncorp/python-ffmpeg:3.11.4-slim-bullseye
+FROM amitkma/python-ffmpeg:3.13-slim
 
 WORKDIR /app
 

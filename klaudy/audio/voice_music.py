@@ -1,10 +1,10 @@
-from youtubesearchpython.__future__ import VideosSearch
+from ytSearch import VideosSearch
 
 import logging
-import discord
 from yt_dlp import YoutubeDL
 
-from . import config
+from .mixer import PCMMixer
+from .pcm_source import MusicPCMSource
 
 ytdl_format_options = {
     'format': 'bestaudio/best',
@@ -31,23 +31,21 @@ async def from_url(url):
     return data["url"]
 
 
-async def play_music(query, mixer):
-    response = await VideosSearch(query, limit=1, timeout=config.REQUESTS_TIMEOUT).next()
+async def play_music(query, mixer: PCMMixer):
+    response = await VideosSearch(query, limit=1).next()
     if not response["result"]:
-        logging.warning(f"play_music no result - {response}")
         return None
+
     video = response["result"][0]
-    source = await from_url(video['link'])
-    music = {"name": video["title"],
-             "duration": video["duration"],
-             "stream": discord.FFmpegPCMAudio(source, executable=config.FFMPEG_FILE,
-                                              before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5")}
+    url = await from_url(video["link"])
     logging.info(f"play_music {video['title']} - {video}")
-    mixer.add_music(music)
+    mixer.add_music(MusicPCMSource(url, video["title"], video.get("duration")))
+
     return video["title"]
 
 
+
 async def off_music(mixer):
-    if not mixer.music_que:
+    if not mixer.music_queue:
         raise NotPlayingError
     mixer.skip_music()
