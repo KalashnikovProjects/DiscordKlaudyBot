@@ -1,5 +1,5 @@
-import argparse
 import logging
+import argparse
 
 from . import discord_bot
 from . import config
@@ -44,8 +44,12 @@ def start_app():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='Klaudy')
+    parser = argparse.ArgumentParser(
+        prog='Klaudy')
     parser.add_argument("-d", "--debug", action='store_true')
     args = parser.parse_args()
-    config.log_level = logging.DEBUG if args.debug else logging.INFO
+    if args.debug:
+        config.log_level = logging.DEBUG
+    else:
+        config.log_level = logging.INFO
     start_app()
