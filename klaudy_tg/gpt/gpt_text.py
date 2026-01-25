@@ -29,7 +29,7 @@ class TextGPT:
         additional_info="",
         retries=1,
         is_pm=False,
-    ) -> AsyncGenerator[str]:
+    ) -> AsyncGenerator:
         try:
             messages = [{
                 "role": "system",

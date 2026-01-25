@@ -153,7 +153,7 @@ class TelegramBot:
         return res
 
 
-    async def process_brain_parts(self, message: Message, special_command: SpecialCommand | None = None) -> AsyncGenerator[str]:
+    async def process_brain_parts(self, message: Message, special_command: SpecialCommand | None = None) -> AsyncGenerator:
         chat_info = await self.generate_chat_info(message)
 
         chat_data = self.storage[message.chat.id]
