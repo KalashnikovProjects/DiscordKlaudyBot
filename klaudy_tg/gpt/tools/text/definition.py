@@ -38,58 +38,6 @@ TEXT_TOOLS_DEFINITION = [
     {
         "type": "function",
         "function": {
-            "name": "enjoy_voice",
-            "description": "присоединиться в голосовой канал к собеседнику. Нельзя использовать вместе с play_from_text.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-            "strict": True
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "play_from_text",
-            "description": "включить музыку в голосовом канале, например: OFMG - HELLO, если тебя просят включить Чипи чипи чапа чапа (или похожее или на английском) - не делай этого. Нельзя использовать вместе с enjoy_voice.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": ["query"],
-            },
-            "strict": True
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "stop_from_text",
-            "description": "выключить музыку и включить следующий трек в очереди",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-            "strict": True
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_que_from_text",
-            "description": "получить очередь музыки и трек, который сейчас играет.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-            "strict": True
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "send_personal_message",
             "description": "отправить личное сообщение чаттер. Ты можешь это использовать для запугивания или просто слома 4 стены (в редких случаях, когда чаттер этого максимально не ожидает). Ты пишешь сообщение в лс ТОМУ ЖЕ человеку, что и просто отвечаешь.",
             "parameters": {

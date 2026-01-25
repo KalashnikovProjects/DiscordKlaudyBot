@@ -3,14 +3,11 @@ import logging
 import traceback
 from typing import AsyncGenerator
 
-import discord
-from discord import Member
 from mistralai import Mistral
 
-from klaudy import config
-from klaudy.gpt.tools import fake_tool
-from klaudy.gpt.tools.text import TEXT_TOOLS_DEFINITION, TEXT_TOOLS_ENABLED_FOR_PM_DEFINITION, TextTools
-from klaudy.audio.voice_connections import VoiceConnections
+from klaudy_tg import config
+from klaudy_tg.gpt.tools import fake_tool
+from klaudy_tg.gpt.tools.text import TEXT_TOOLS_DEFINITION, TEXT_TOOLS_ENABLED_FOR_PM_DEFINITION, TextTools
 
 
 class TextGPT:
@@ -26,10 +23,9 @@ class TextGPT:
     async def generate_answer_parts(
         self,
         messages_history: list[dict],
-        voice_connections: VoiceConnections,
-        bot_user_id: int,
-        mes: discord.Message,
-        members: dict[str, Member],
+        bot,
+        sender_user_id: int,
+        bot_prompt: str,
         additional_info="",
         retries=1,
         is_pm=False,
@@ -37,11 +33,11 @@ class TextGPT:
         try:
             messages = [{
                 "role": "system",
-                "content": f"{config.BotConfig.bot_prompt}\n{additional_info}"
+                "content": f"{bot_prompt}\n{additional_info}"
             }]
             messages.extend(messages_history)
 
-            response = self.client.chat.complete(
+            response = await self.client.chat.complete_async(
                 model=self.model,
                 messages=messages,
                 temperature=self.temperature,
@@ -70,22 +66,10 @@ class TextGPT:
                         fake_tool
                     )
                     if function_name == "send_personal_message":
-                        function_params["message"] = mes
-                        function_params["members"] = members
-
-
-                    if function_name in ("stop_from_text", "get_que_from_text"):
-                        function_params["message"] = mes
-                        function_params["voice_connections"] = voice_connections
-
-                    if function_name in ("enjoy_voice", "play_from_text"):
-                        function_params["message"] = mes
-                        function_params["voice_connections"] = voice_connections
-                        function_params["bot_user_id"] = bot_user_id
+                        function_params["bot"] = bot
+                        function_params["user_id"] = sender_user_id
 
                     function_response = await function_to_call(**function_params)
-                    if function_name in ("play_from_text", "get_que_from_text"):
-                        tools_logs.append(function_response)
                     print(f"Tool {tool_call.id}:", f"{function_name}({function_params}) -> {function_response}")
 
                     messages.append({
@@ -94,7 +78,7 @@ class TextGPT:
                         "content": function_response,
                         "tool_call_id": tool_call.id
                     })
-                response = self.client.chat.complete(
+                response = await self.client.chat.complete_async(
                     model=self.model,
                     messages=messages,
                     temperature=self.temperature,
@@ -116,10 +100,9 @@ class TextGPT:
             if retries:
                 async for i in self.generate_answer_parts(
                     messages_history,
-                    voice_connections,
-                    bot_user_id,
-                    mes,
-                    members,
+                    bot,
+                    sender_user_id,
+                    bot_prompt,
                     additional_info,
                     retries - 1
                 ):

@@ -1,18 +1,17 @@
-import io
+import enum
 import logging
 from collections import defaultdict
-from typing import List, Dict, Any
+from dataclasses import dataclass, field
+from typing import AsyncGenerator
 import asyncio
 
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.types import Message
-from dataclasses import dataclass
 import telegramify_markdown
-from pydub import AudioSegment
 
-from . import config, utils
-from .gpt import GPT, upload_file
+from klaudy_tg.gpt.gpt_text import TextGPT
+from . import config, utils, message_convertor
 
 telegramify_markdown.customize.strict_markdown = False
 telegramify_markdown.customize.cite_expandable = True
@@ -49,101 +48,60 @@ class BotAction:
         await self.exit()
 
 
+# download with https://api.telegram.org/file/bot<token>/<file_path> or await bot.download_file(file_path, <BinaryIO>)
 @dataclass
-class FileId:
-    id: str
-    mime_type: str | None
+class MessageFile:
+    file_path: str
 
 
 @dataclass
-class CacheMessage:
+class CachedMessage:
     autor: str
     text: str
-    files_uri: list[str]
+    files: list[MessageFile] = field(default_factory=list)
 
 
-def ogg_to_wav_bytes(ogg_bytes):
-    ogg_audio = AudioSegment.from_ogg(io.BytesIO(ogg_bytes))
-    wav_bytes = ogg_audio.export(format="wav").read()
-    return wav_bytes
+@dataclass
+class ChatData:
+    message_list: list[CachedMessage] = field(default_factory=list)
+    gpt_mode_toggled: bool = False
 
 
-class MessagesCache:
-    def __init__(self, limit=10):
-        self.storage = defaultdict(list)
-        self.limit = limit
-
-    def clear_chat(self, chat_id: int):
-        self.storage.pop(chat_id)
-
-    def add(self, chat_id: int, message: CacheMessage):
-        self.storage[chat_id].append(message)
-        if len(self.storage[chat_id]) > self.limit:
-            self.storage[chat_id].pop(0)
-
-    def get(self, chat_id: int) -> list[CacheMessage]:
-        return self.storage.get(chat_id, [])
-
+class SpecialCommand(enum.Enum):
+    START=1
+    HELP=2
+    CLEAR=3
+    GPT=4
 
 class TelegramBot:
     def __init__(self):
-        self.messages_cache = MessagesCache(limit=config.BotConfig.message_history)
+        self.storage: dict[int, ChatData] = defaultdict(ChatData)
 
-        self.me = None
+        self.bot_user = None
         self.bot = Bot(token=config.Telegram.token)
         self.dp = Dispatcher()
-        self.gpt = GPT()
+        self.text_gpt = TextGPT()
         self.setup_handlers()
 
-    async def setup_me(self):
-        self.me = await self.bot.get_me()
-
-    async def get_message_files(self, message: Message):
-        files = [FileId(id=i.file_id,
-                        mime_type=i.mime_type if hasattr(i, 'mime_type') else None)
-                 for i in (
-                     message.document, message.video, message.audio, message.sticker, message.video_note)
-                 if i and not (hasattr(i, 'is_animated') and i.is_animated or hasattr(i, 'is_video') and i.is_video)]
-        if message.photo:
-            files.extend([FileId(id=i.file_id, mime_type=None) for i in message.photo])
-        if message.voice:
-            files.append(FileId(id=message.voice.file_id, mime_type="ogg"))
-        return files
-
-    async def upload_files(self, files: list[FileId]) -> list[str]:
-        file_data = []
-
-        for i in files:
-            data = (await self.bot.download_file((await self.bot.get_file(i.id)).file_path)).read()
-            mime_type = i.mime_type
-            if i.mime_type and "ogg" in i.mime_type:
-                data = ogg_to_wav_bytes(data)
-                mime_type = "audio/wav"
-            uri = await upload_file(data, mime_type, i.id)
-            file_data.append(uri)
-        return file_data
-
-    def setup_handlers(self):
-        self.dp.message.register(self.handle_message)
+    async def setup_bot_user(self):
+        self.bot_user = await self.bot.get_me()
 
     async def add_to_history(self, message: Message):
-        files = await self.upload_files(await self.get_message_files(message))
+        files = await self.get_message_files(message)
         text = message.text or message.caption or ""
 
-        mes = CacheMessage(autor=message.from_user.username, text=text, files_uri=files)
-        self.messages_cache.add(message.chat.id, mes)
+        mes = CachedMessage(autor=message.from_user.username, text=text, files=files)
+        self.storage[message.chat.id].message_list.append(mes)
+        if len(self.storage[message.chat.id].message_list) > config.BotConfig.message_history:
+            self.storage[message.chat.id].message_list.pop(0)
 
-    async def load_history(self, message: Message) -> List[CacheMessage]:
-        return self.messages_cache.get(message.chat.id)
 
-    def normalize_history(self, history: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    async def get_message_files(self, message: Message) -> list[MessageFile]:
         res = []
-        last = "model"
-        for i in history:
-            if i["role"] == last:
-                res.append({"role": "model" if i["role"] == "user" else "user", "parts": [{"text": "."}]})
-            last = i["role"]
-            res.append(i)
+        if message.photo:
+            for photo in message.photo:
+                file = await self.bot.get_file(photo.file_id)
+                res.append(MessageFile(file.file_path))
         return res
 
     async def generate_chat_info(self, message: Message) -> str:
@@ -159,8 +117,18 @@ class TelegramBot:
             chat_info = f"Информация о чате \nЧат с пользователем: @{message.chat.username}"
         return chat_info
 
-    async def convert_history_to_dicts(self, history: List[CacheMessage], max_input_symbols: int,
-                                       file_history: int) -> List[Dict[str, Any]]:
+    def normalize_history(self, history):
+        res = []
+        last = "assistant"
+        for i in history:
+            if i["role"] == last:
+                res.append({"role": "assistant" if i["role"] == "user" else "user", "parts": [{"text": "."}]})
+            res.append(i)
+            last = i["role"]
+        return res
+
+    async def convert_history_to_dicts(self, history, max_input_symbols: int,
+                                       file_history: int):
         messages = []
         count = 0
 
@@ -173,60 +141,92 @@ class TelegramBot:
         messages = self.normalize_history(messages)
         return messages
 
-    async def convert_message_to_dict(self, mes: CacheMessage, with_files: bool = False) -> Dict[str, Any]:
+    async def convert_message_to_dict(self, mes: CachedMessage, with_files: bool = False):
         cont = mes.text or ""
-        if mes.autor == self.me.username:
-            res = {"role": "model", "parts": [{"text": cont}]}
+        if mes.autor == self.bot_user.username:
+            res = {"role": "assistant", "content": [{"type": "text", "text": cont}]}
         else:
-            res = {"role": "user", "parts": [{"text": f"@{mes.autor}: {cont}"}]}
-        if with_files:
-            if mes.files_uri:
-                res["parts"].extend([{"file_data": {"file_uri": image}} for image in mes.files_uri])
-
+            res = {"role": "user", "content": [{"type": "text", "text": f"@{mes.autor}: {cont}"}]}
+        if with_files and mes.files:
+            for file in mes.files:
+                res["content"].append({"type": "image_url", "image_url": f"https://api.telegram.org/file/bot{config.Telegram.token}/{file.file_path}"})
         return res
 
-    async def process_brain(self, message: Message, no_prompt=False) -> str:
+
+    async def process_brain_parts(self, message: Message, special_command: SpecialCommand | None = None) -> AsyncGenerator[str]:
         chat_info = await self.generate_chat_info(message)
 
-        history = await self.load_history(message)
-        messages = await self.convert_history_to_dicts(history, config.BotConfig.max_input_symbols,
+        chat_data = self.storage[message.chat.id]
+        messages = await self.convert_history_to_dicts(chat_data.message_list, config.BotConfig.max_input_symbols,
                                                        config.BotConfig.file_history)
 
-        chat_answer = await self.gpt.generate_answer(messages, additional_info=chat_info, no_prompt=no_prompt)
-        if len(chat_answer) >= 4096:  # Max message len in Telegram
-            chat_answer = chat_answer[:4091] + "..."
-        return chat_answer
+        bot_prompt = config.BotConfig.bot_prompt if not chat_data.gpt_mode_toggled else config.BotConfig.gpt_mode
+        if special_command:
+            match special_command:
+                case SpecialCommand.START:
+                    bot_prompt = config.BotConfig.start_prompt if not chat_data.gpt_mode_toggled else config.BotConfig.start_prompt_gpt_mode
+                case SpecialCommand.HELP:
+                    bot_prompt = config.BotConfig.help_prompt if not chat_data.gpt_mode_toggled else config.BotConfig.help_prompt_gpt_mode
+                case SpecialCommand.CLEAR:
+                    bot_prompt = config.BotConfig.clear_prompt if not chat_data.gpt_mode_toggled else config.BotConfig.clear_prompt_gpt_mode
+                case SpecialCommand.GPT:
+                    bot_prompt = config.BotConfig.gpt_prompt if not chat_data.gpt_mode_toggled else config.BotConfig.gpt_prompt_prompt_gpt_mode
+        async for part in self.text_gpt.generate_answer_parts(messages_history=messages,
+                                                              mes=message,
+                                                              bot_user_id=self.bot_user.id,
+                                                              bot_prompt=bot_prompt,
+                                                              additional_info=chat_info,
+                                                              is_pm=message.chat.type in ['group', 'supergroup']):
+            for text_part in message_convertor.markdown_and_split_text(part, config.Telegram.max_output_symbols):
+                yield text_part
 
     async def clear(self, message: Message):
-        self.messages_cache.clear_chat(message.chat.id)
+        self.storage[message.chat.id].message_list.clear()
+
+    async def toggle_gpt(self, message: Message):
+        self.storage[message.chat.id].gpt_mode_toggled = not self.storage[message.chat.id].gpt_mode_toggled
 
     async def handle_message(self, message: Message):
-        is_reply = message.reply_to_message and message.reply_to_message.from_user.username == self.me.username
+        is_reply = message.reply_to_message and message.reply_to_message.from_user.username == self.bot_user.username
         text = message.text or message.caption or ""
-        if text.startswith("/clear"):
-            await self.clear(message)
-            return
-        no_prompt_mod = text.startswith("/gpt")
-        is_ping = f"@{config.BotConfig.name}" in text or self.me.username in text
-        if no_prompt_mod or is_reply or is_ping or message.chat.type == "private":
-            async with BotAction(self.bot, message.chat.id, 'typing'):
-                await self.add_to_history(message)
-
-                answer = await self.process_brain(message, no_prompt=no_prompt_mod)
-                if answer:
-                    converted = telegramify_markdown.markdownify(
-                        answer,
-                        max_line_length=None,
-                        normalize_whitespace=False
-                    )
-                    await self.add_to_history(await message.reply(converted, parse_mode=ParseMode.MARKDOWN_V2))
-        else:
+        special_command = None
+        match text.split()[0]:
+            case "/clear":
+                special_command = SpecialCommand.CLEAR
+                await self.clear(message)
+            case "/gpt":
+                special_command = SpecialCommand.GPT
+                await self.clear(message)
+                await self.toggle_gpt(message)
+            case "/start":
+                special_command = SpecialCommand.START
+            case "/help":
+                special_command = SpecialCommand.HELP
+            case _:
+                is_ping = f"@{config.BotConfig.name}" in text or self.bot_user.username in text
+                if not (is_reply or is_ping or message.chat.type == "private"):
+                    await self.add_to_history(message)
+        async with BotAction(self.bot, message.chat.id, 'typing'):
             await self.add_to_history(message)
+            is_first_reply_flag = True
+            async for part in self.process_brain_parts(message, special_command):
+                if part == "":
+                    continue
+                if is_first_reply_flag:
+                    mes = await message.reply(part, parse_mode=ParseMode.MARKDOWN_V2)
+                else:
+                    mes = await self.bot.send_message(message.chat.id, part, parse_mode=ParseMode.MARKDOWN_V2)
+                await self.add_to_history(mes)
+
+
 
     async def start(self):
-        await self.setup_me()
+        await self.setup_bot_user()
         logging.info("Starting...")
         await self.dp.start_polling(self.bot)
+
+    def setup_handlers(self):
+        self.dp.message.register(self.handle_message)
 
 
 def run_bot():

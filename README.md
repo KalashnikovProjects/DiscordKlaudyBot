@@ -6,9 +6,8 @@
 * Проверять содержание ссылки, если на сайте много текста отправляет запрос на [сокращение текста от Яндекса](https://300.ya.ru)
 * Просматривать изображения.
 # Инструкции по использованию (модификации)
-1. Создать **application** -> добавить **bot** на [Discord Development Portal](https://discord.com/developers/applications), включить в настройках бота все галочки 
-_Privileged Gateway Intents_, получить токен
-2. Для редактирования промпта (личности) бота необходимо поменять _name_ и _bot_prompt_ в **[klaudy/config.py](klaudy_tg/config.py)**
+1. Создать бота через BotFather, получить токен
+2. Для редактирования промпта (личности) бота необходимо поменять _name_ и все _bot_prompt_ в **[klaudy_tg/config.py](klaudy_tg/config.py)**
 3. Установить зависимости из [requirements.txt](requirements.txt)
 4. Заполнить поля **environment variables** (переменных окружения) своими значениями
 5. Запустить `python -m klaudy_tg`
