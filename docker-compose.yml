@@ -1,6 +1,6 @@
 services:
-  klaudy-python:
-    image: kalashnik/klaudy:latest
+  klaudy-tg:
+    image: kalashnik/klaudy-tg:latest
     build:
       dockerfile: Dockerfile
     env_file:
