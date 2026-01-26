@@ -1,4 +1,4 @@
-FROM amitkma/python:3.13-slim AS builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
@@ -7,7 +7,7 @@ RUN pip wheel --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
 
 COPY /klaudy_tg klaudy_tg
 
-FROM amitkma/python:3.13-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
