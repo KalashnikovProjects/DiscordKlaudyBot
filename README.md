@@ -1,5 +1,5 @@
 # <img src="images/klaudy%20avatar.jpg" width="45" style="border-radius: 5px"> Основное описание  
-#### Клауди - AI чат бот Discord на основе ~~ChatGPT~~ -> ~~Gemini API~~ -> <img src="images/mistral logo.png" width="15"> Mistral AI API , вдохновлён закрывшимся официальным ботом Discord Clyde.
+#### Клауди - AI чат бот для Discord и Telegram на основе ~~ChatGPT~~ -> ~~Gemini API~~ -> <img src="images/mistral logo.png" width="15"> Mistral AI API , вдохновлён закрывшимся официальным ботом Discord Clyde.
 
 ## [<img src="images/telegram logo.webp" width="25">  Клауди в telegram](https://t.me/KlaudyBot)
 #### В ветке [telegram](https://github.com/KalashnikovProjects/DiscordKlaudyBot/tree/telegram) код telegram версии этого бота.
