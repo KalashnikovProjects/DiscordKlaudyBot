@@ -1,9 +1,9 @@
-# <img src="images/klaudy%20avatar.jpg" width="45" style="border-radius: 5px"> Discord бот Клауди
-#### Клауди - AI чат бот Discord на основе ~~ChatGPT~~ -> ~~Gemini API~~ -> <img src="images/mistral logo.png" width="15"> Mistral AI API , вдохновлён закрывшимся официальным ботом Discord Clyde.
+# <img src="images/klaudy%20avatar.jpg" width="45" style="border-radius: 5px"> AI бот Клауди
+#### Клауди - AI чат бот для Discord и Telegram на основе ~~ChatGPT~~ -> ~~Gemini API~~ -> <img src="images/mistral logo.png" width="15"> Mistral AI API , вдохновлён закрывшимся официальным ботом Discord Clyde.
 
-## [<img src="images/telegram logo.webp" width="25">  Клауди в telegram](https://t.me/KlaudyBot)
-#### В ветке [telegram](https://github.com/KalashnikovProjects/DiscordKlaudyBot/tree/telegram) код telegram версии этого бота.
-#### <img src="images/discord logo.png" width="18"> Discord бот доступен только selfhosted.
+## [<img src="images/telegram logo.webp" width="25">  Клауди в Telegram](https://t.me/KlaudyBot)
+#### В ветке [telegram](https://github.com/KalashnikovProjects/DiscordKlaudyBot/tree/telegram) код <img src="images/telegram logo.webp" width="15"> Telegram версии этого бота.
+#### <img src="images/discord logo.png" width="18"> Discord бот доступен только self hosted.
 ## Он может: 
 * Включать музыку с Youtube <img src="images/youtube logo.png" width="15"> в голосовом канале
 * Искать гифки с помощью tenor
