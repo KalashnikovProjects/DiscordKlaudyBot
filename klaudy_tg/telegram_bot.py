@@ -205,6 +205,7 @@ class TelegramBot:
                     continue
                 if is_first_reply_flag:
                     mes = await message.reply(part, parse_mode=ParseMode.MARKDOWN_V2)
+                    is_first_reply_flag = False
                 else:
                     mes = await self.bot.send_message(message.chat.id, part, parse_mode=ParseMode.MARKDOWN_V2)
                 await self.add_to_history(mes)
