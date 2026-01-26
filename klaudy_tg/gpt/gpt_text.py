@@ -69,6 +69,8 @@ class TextGPT:
                         function_params["user_id"] = sender_user_id
 
                     function_response = await function_to_call(**function_params)
+                    if function_name == "search_gif_on_tenor":
+                        tools_logs.append(function_response)
                     print(f"Tool {tool_call.id}:", f"{function_name}({function_params}) -> {function_response}")
 
                     messages.append({
@@ -91,7 +93,6 @@ class TextGPT:
                 res += "\n" + "\n".join(tools_logs)
                 tools_logs = []
             yield res
-
 
         except Exception as e:
             logging.error(traceback.format_exc())

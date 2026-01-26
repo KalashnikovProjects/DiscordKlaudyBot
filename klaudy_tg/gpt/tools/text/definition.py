@@ -5,7 +5,7 @@ TEXT_TOOLS_DEFINITION = [
         "type": "function",
         "function": {
             "name": "search_gif_on_tenor",
-            "description": "найти ссылку на gif (гифку) по любой теме с помощью Tenor. потом эту ссылку тебе нужно будет вставить в сообщение.",
+            "description": "Найти gif по любой теме с помощью Tenor. Ссылка потом автоматически вставляется в сообщение.",
             "parameters": {
                 "type": "object",
                 "properties": {
