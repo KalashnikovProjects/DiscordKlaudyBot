@@ -45,7 +45,6 @@ class TextGPT:
                 top_p=1,
                 tools=TEXT_TOOLS_DEFINITION if not is_pm else TEXT_TOOLS_ENABLED_FOR_PM_DEFINITION,
                 tool_choice="auto",
-                parallel_tool_calls=True,
             )
             tools_logs = []
             while response.choices[0].message.tool_calls:

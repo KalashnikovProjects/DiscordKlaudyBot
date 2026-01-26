@@ -117,16 +117,6 @@ class TelegramBot:
             chat_info = f"Информация о чате \nЧат с пользователем: @{message.chat.username}"
         return chat_info
 
-    def normalize_history(self, history):
-        res = []
-        last = "assistant"
-        for i in history:
-            if i["role"] == last:
-                res.append({"role": "assistant" if i["role"] == "user" else "user", "parts": [{"text": "."}]})
-            res.append(i)
-            last = i["role"]
-        return res
-
     async def convert_history_to_dicts(self, history, max_input_symbols: int,
                                        file_history: int):
         messages = []
@@ -138,7 +128,6 @@ class TelegramBot:
                 break
             messages.append(await self.convert_message_to_dict(mes, with_files=n <= file_history))
 
-        messages = self.normalize_history(messages)
         return messages
 
     async def convert_message_to_dict(self, mes: CachedMessage, with_files: bool = False):
@@ -190,10 +179,13 @@ class TelegramBot:
         is_reply = message.reply_to_message and message.reply_to_message.from_user.username == self.bot_user.username
         text = message.text or message.caption or ""
         special_command = None
-        match text.split()[0]:
+        await self.add_to_history(message)
+        command = text.replace("@", " ").split()[0] if text.replace("@", " ").split() else ""
+        match command:
             case "/clear":
                 special_command = SpecialCommand.CLEAR
                 await self.clear(message)
+                await self.add_to_history(message)
             case "/gpt":
                 special_command = SpecialCommand.GPT
                 await self.clear(message)
@@ -205,9 +197,8 @@ class TelegramBot:
             case _:
                 is_ping = f"@{config.BotConfig.name}" in text or self.bot_user.username in text
                 if not (is_reply or is_ping or message.chat.type == "private"):
-                    await self.add_to_history(message)
+                    return
         async with BotAction(self.bot, message.chat.id, 'typing'):
-            await self.add_to_history(message)
             is_first_reply_flag = True
             async for part in self.process_brain_parts(message, special_command):
                 if part == "":
