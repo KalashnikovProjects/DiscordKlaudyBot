@@ -57,7 +57,9 @@ class BotEventHandler(discord.Client):
                                                               voice_connections=self.voice_connections,
                                                               additional_info=data.chat_info,
                                                               is_pm=message.guild is None):
-            yield message_convertor.convert_ai_answer_to_message_text(part, data.members)
+            text = message_convertor.convert_ai_answer_to_message_text(part, data.members)
+            for text_part in message_convertor.split_text(text, config.Discord.max_output_symbols):
+                yield text_part
 
 
 def run_bot():

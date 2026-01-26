@@ -41,7 +41,7 @@ class TextGPT:
             }]
             messages.extend(messages_history)
 
-            response = self.client.chat.complete(
+            response = await self.client.chat.complete_async(
                 model=self.model,
                 messages=messages,
                 temperature=self.temperature,
@@ -84,7 +84,7 @@ class TextGPT:
                         function_params["bot_user_id"] = bot_user_id
 
                     function_response = await function_to_call(**function_params)
-                    if function_name in ("play_from_text", "get_que_from_text"):
+                    if function_name in ("play_from_text", "get_que_from_text", "search_gif_on_tenor"):
                         tools_logs.append(function_response)
                     print(f"Tool {tool_call.id}:", f"{function_name}({function_params}) -> {function_response}")
 
@@ -94,7 +94,7 @@ class TextGPT:
                         "content": function_response,
                         "tool_call_id": tool_call.id
                     })
-                response = self.client.chat.complete(
+                response = await self.client.chat.complete_async(
                     model=self.model,
                     messages=messages,
                     temperature=self.temperature,
@@ -109,7 +109,6 @@ class TextGPT:
                 res += "\n" + "\n".join(tools_logs)
                 tools_logs = []
             yield res
-
 
         except Exception as e:
             logging.error(traceback.format_exc())

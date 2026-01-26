@@ -37,7 +37,6 @@ class VoiceConnect:
     def voice_data_callback(self, user: discord.User, data: voice_recv.VoiceData):
         if user is None or user.id == self.bot_user_id:
             return
-
         asyncio.run_coroutine_threadsafe(
                 self.voice_gpt_client.send(pcm48k_stereo_to_pcm16k_mono(data.pcm)),
                 self.voice_gpt_client.loop
