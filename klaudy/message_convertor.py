@@ -56,7 +56,7 @@ def generate_chat_info(message: discord.Message):
         chat_info = f"""Информация о чате \nНазвание сервера: {message.guild.name} \nНазвание канала: {message.channel.name} \nСписок пользователей чата:"""
         if len(message.guild.members) < config.BotConfig.members_info_limit:
             for member in message.guild.members:
-                chat_info += f" {member.display_name}: {member.name};"
+                chat_info += f"Отображемый ник: {member.display_name}, уникальный ник: {member.name}\n"
     else:
         chat_info = f"Ты сейчас в личных сообщениях с пользователем {message.author.display_name}: {message.author.name}"
     return chat_info
@@ -89,13 +89,14 @@ async def convert_message_to_dict(bot_user_id: int, mes: discord.Message, with_f
 def convert_ai_answer_to_message_text(s: str, members: dict[str, Member]) -> str:
     def convert_ping(m):
         ping_name = m.group(0)[1:]
-        if ping_name not in members:
-            return f"@{ping_name}"
-        return f"<@{members[ping_name].id}>"
+        if ping_name in members:
+            return f"<@{members[ping_name].id}>"
+        if ping_name[-1] == "." and ping_name[:-1] in members:
+            return f"<@{members[ping_name[:-1]].id}>."
+        return f"@{ping_name}"
+
 
     res = re.sub(NIK_RE, convert_ping, s)
-    if len(res) >= 2000:
-        res = res[:1995] + "..."
     return res
 
 async def convert_history_to_messages(bot_user_id, history, max_input_symbols, file_history) -> list[dict]:
@@ -109,3 +110,27 @@ async def convert_history_to_messages(bot_user_id, history, max_input_symbols, f
         messages.append(await convert_message_to_dict(bot_user_id=bot_user_id, mes=mes, with_files=n <= file_history))
     messages = messages[::-1]
     return messages
+
+
+# Split by \n or space to strings <2000 symbols len
+def split_text(text, max_len):
+    parts = []
+
+    while len(text) > max_len:
+        chunk = text[:max_len]
+
+        split_pos = chunk.rfind('\n')
+
+        if split_pos == -1:
+            split_pos = chunk.rfind(' ')
+
+        if split_pos == -1:
+            split_pos = max_len
+
+        parts.append(text[:split_pos].rstrip())
+        text = text[split_pos:].lstrip()
+
+    if text:
+        parts.append(text)
+
+    return parts
